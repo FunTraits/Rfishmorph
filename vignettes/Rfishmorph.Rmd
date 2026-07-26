@@ -1,0 +1,118 @@
+---
+title: "Getting started with Rfishmorph"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with Rfishmorph}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 6,
+                      fig.height = 4)
+```
+
+```{r setup}
+library(Rfishmorph)
+```
+
+## The FISHMORPH scheme
+
+`Rfishmorph` implements the FISHMORPH morphospace of Brosse et al. (2021): 21
+landmarks digitized on a lateral photograph, from which 11 body segments and 9
+dimensionless ratios are derived.
+
+```{r}
+sc <- fishmorph_schema()
+sc$segments
+sc$ratios
+data.frame(ratio = sc$ratios,
+           definition = vapply(sc$ratio_def, paste, "", collapse = " / "),
+           `function` = sc$ratio_function[sc$ratios],
+           check.names = FALSE)
+```
+
+## From landmarks to traits
+
+```{r}
+lm <- read_landmarks_csv(
+  system.file("extdata", "example_landmarks.csv", package = "Rfishmorph"))
+lm
+
+seg <- fishmorph_segments(lm, scale_cm = 1)
+seg
+
+fishmorph_ratios(seg)
+```
+
+```{r, eval = requireNamespace("ggplot2", quietly = TRUE)}
+plot_landmarks(lm, specimen = 1)
+```
+
+## Reconstruction and the round-trip guarantee
+
+`reconstruct_fishmorph_landmarks()` inverts `fishmorph_segments()`. The free
+parameters move landmarks around but never change segment lengths, so the
+round-trip is exact.
+
+```{r}
+seg1 <- list(Bl = 10, Bd = 3.2, Hd = 2.4, Eh = 1.1, Mo = 1.6, PFi = 1.9,
+             PFl = 2.1, Ed = 0.6, Jl = 1.3, CPd = 1.0, CFd = 3.0)
+check_reconstruction_roundtrip(seg1)
+```
+
+## The functional trait space
+
+The ordination is fitted once on the reference database and then frozen, so new
+specimens are *projected* into the same coordinate system rather than
+re-estimating the axes.
+
+```{r}
+ref <- load_fishmorph_reference()
+ts  <- fishmorph_trait_space(ref, groups = ref$Order)
+ts
+```
+
+```{r}
+plot_trait_space(ts, style = "hull")                 # per-group convex hulls
+plot_trait_space(ts, style = "hull", reference_density = TRUE)  # + global density
+```
+
+## Quality control: segments vs landmarks
+
+Two scale-invariant quantities let you check a workbook's internal consistency:
+the 9 ratios and the segments expressed as a fraction of `Bl`.
+
+```{r}
+segtab <- data.frame(
+  Genus.species = paste0("sp", 1:6), Bl = 10,
+  Bd = c(3, 3.2, 3.4, 3.6, 3.8, 4), Hd = c(2, 2.1, 2.2, 2.3, 2.4, 2.5),
+  Eh = 1, Mo = 1.5, PFi = 2, PFl = 2.5, Ed = 0.5, Jl = 1.2, CPd = 1, CFd = 3)
+cmp <- compare_segments_landmarks(segtab, segtab, id_col = "Genus.species")
+summary(cmp)
+```
+
+## Adding a new species
+
+```{r}
+rec <- new_fishmorph_species(
+  "Genus novus",
+  segments = list(Bl = 10, Bd = 3.2, Hd = 2.4, Eh = 1.1, Mo = 1.6, PFi = 1.9,
+                  PFl = 2.1, Ed = 0.6, Jl = 1.3, CPd = 1.0, CFd = 3.0),
+  family = "Cyprinidae", order = "Cypriniformes")
+ref2 <- add_fishmorph_species(ref, rec)
+nrow(ref2)
+```
+
+Name resolution and the global freshwater list require `rfishbase` and network
+access:
+
+```{r, eval = FALSE}
+validate_species_names(c("Salmo trutta", "Esox_lucius"))
+fw <- freshwater_fish_list()
+```
+
+## Reference
+
+Brosse et al. (2021) *Global Ecology and Biogeography* 30:2330–2336.
+<https://doi.org/10.1111/geb.13395>

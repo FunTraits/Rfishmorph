@@ -16,9 +16,7 @@ global freshwater fish list.
 
 ```r
 # install.packages("devtools")
-devtools::install("path/to/Rfishmorph")   # local source
-# or, after pushing to GitHub:
-# devtools::install_github("aureletoussaint/Rfishmorph")
+remotes::install_github("FunTraits/Rfishmorph")
 ```
 
 The core functions depend only on base R. Optional features use `ggplot2`

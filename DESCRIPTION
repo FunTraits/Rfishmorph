@@ -1,0 +1,70 @@
+Package: Rfishmorph
+Type: Package
+Title: Digitizing, Storing, Analysing and Exploring the FISHMORPH Database
+Version: 0.2.0
+Authors@R: c(
+    person("Aurele", "Toussaint", email = "aurele.toussaint@cnrs.fr",
+           role = c("aut", "cre"), comment = c(affiliation = "CNRS")))
+Description: Tools dedicated to the FISHMORPH morphological database (Brosse et
+    al., 2021, Global Ecology and Biogeography). Rfishmorph reconstructs the 21
+    FISHMORPH landmarks, computes the 11 body segments and the 9 dimensionless
+    morphological ratios, standardizes landmark geometry and enforces the
+    FISHMORPH digitizing conventions, projects specimens into the FISHMORPH
+    functional trait space, and provides visualization and quality-control tools
+    to compare segment- and landmark-derived measurements. It also offers a
+    guided workflow to add new species, using 'rfishbase' to validate and update
+    taxonomy and to build a global list of freshwater fishes. Two 'shiny'
+    applications cover the ends of the workflow: a guided digitizer that turns
+    specimen photographs into landmarks, and an explorer of the global
+    morphological space of freshwater fishes. Digitized specimens are captured in
+    an append-only journal and consolidated into a derived 'DuckDB' database with
+    integrity constraints, from which 'Parquet' and CSV archives are exported. The
+    FISHMORPH routines were originally developed inside 'intraitR' and are
+    collected here as a stand-alone package.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 4.1.0)
+Imports:
+    stats,
+    utils,
+    grDevices,
+    graphics,
+    tools
+Suggests:
+    ggplot2,
+    readxl,
+    writexl,
+    openxlsx,
+    rfishbase,
+    geomorph,
+    missForest,
+    ape,
+    phytools,
+    shiny,
+    jpeg,
+    png,
+    magick,
+    vegan,
+    DBI,
+    duckdb,
+    arrow,
+    bslib,
+    DT,
+    plotly,
+    dplyr,
+    tidyr,
+    ggrepel,
+    scales,
+    RColorBrewer,
+    MASS,
+    magrittr,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Roxygen: list(markdown = TRUE)
+URL: https://github.com/aureletoussaint/Rfishmorph
+BugReports: https://github.com/aureletoussaint/Rfishmorph/issues
+Config/roxygen2/version: 8.0.0
