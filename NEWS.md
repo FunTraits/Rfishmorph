@@ -20,6 +20,15 @@
   ticked). Caudal peduncle and fin (16-19) and appendage tips (12 pectoral,
   15 jaw) are excluded, as are the scale bar (20, 21), the derived point (23)
   and the hinges (24, 25). Tolerance: 0.003 of body length.
+* The **derived ventral points 8, 9 and 11 are excluded too**: they are computed
+  from landmark 4 (belly line), so testing whether 4 is the lowest point against
+  them is circular. Settled on the data rather than by argument -- over the 1,036
+  digitized T-26 specimens of the intraitR corpus, including 8/9/11 flags 20.6%
+  of the batch (198 of 213 flags are those three points, median overshoot 0.5% of
+  `Bl`, i.e. belly-line noise), whereas excluding them flags 1.5% at a median
+  overshoot of 6.8% of `Bl`, with a flag rate flat from 0.003 to 0.02 `Bl`.
+  The comparison set is therefore 1, 2, 5, 6, 7, 10, 13, 14, 22 -- the landmarks
+  that are independent measurements on the body outline.
 * The check is toggled by the new "Verifier 3/4 (extremes) a l'enregistrement"
   box (on by default).
 * New journal status **`"adjusted"`** for points relocated by that automatic

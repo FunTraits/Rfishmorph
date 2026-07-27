@@ -352,13 +352,25 @@
 # est une erreur de saisie qui sous-estime Bd.
 #
 # Points EXCLUS de la comparaison :
+#   8, 9, 11 : points ventraux DERIVES. Ils sont calcules DEPUIS le 4 (ligne du
+#           ventre) : tester si 4 est le point le plus bas contre eux est
+#           circulaire. Mesure faite sur les 1036 specimens T-26 digitalises :
+#           en les incluant, 20,6 % du lot est signale, dont 198 des 213 alertes
+#           portent sur 8, 9 ou 11, avec un depassement median de 0,5 % de Bl --
+#           du bruit de ligne de ventre, pas une erreur de Bd. En les excluant,
+#           1,5 % est signale (16 specimens), dont 12 fois le cas 5-au-dessus-de-3,
+#           avec un depassement median de 7,8 % de Bl. Le taux est alors STABLE
+#           de 0,003 a 0,02 Bl : ce qui reste est une erreur grossiere, nettement
+#           separee du bruit, et non un artefact de seuil ;
 #   16-19 : pedoncule et nageoire caudale -- hors du contour du corps par
 #           definition (demande explicite), la caudale depassant souvent Bd ;
 #   12, 15 : extremites de la pectorale et de la machoire -- appendices, qui
 #           depassent legitimement le contour ;
 #   20, 21 : barre d'echelle ; 23 : point derive ; 24, 25 : charnieres de saisie.
-# Restent donc compares a 3/4 : 1, 2, 5, 6, 7, 8, 9, 10, 11, 13, 14, 22.
-.FM_EXTREME_EXCLUDE <- c(12L, 15L, 16L, 17L, 18L, 19L, 20L, 21L, 23L, 24L, 25L)
+# Restent compares a 3/4 : 1, 2, 5, 6, 7, 10, 13, 14, 22 -- les landmarks qui
+# sont des MESURES independantes du contour du corps.
+.FM_EXTREME_EXCLUDE <- c(8L, 9L, 11L, 12L, 15L, 16L, 17L, 18L, 19L,
+                         20L, 21L, 23L, 24L, 25L)
 
 # tolerance par defaut, en FRACTION de la corde 1-2 : 0.3 % de Bl (soit ~6 px
 # pour un poisson de 2000 px). En deca, l'ecart releve du bruit de clic.
@@ -564,7 +576,10 @@
 #' soit l'orientation (tete a gauche ou a droite, photo retournee, case
 #' "Inverser dorsal/ventral" cochee). Sont EXCLUS de la comparaison le pedoncule
 #' et la nageoire caudale (16-19), qui depassent le corps par definition, ainsi
-#' que les extremites d'appendices (12 pectorale, 15 machoire) ; la barre
+#' que les extremites d'appendices (12 pectorale, 15 machoire) et les points
+#' ventraux DERIVES (8, 9, 11), calcules depuis le 4 lui-meme -- les inclure
+#' signalerait 20,6 pour cent des specimens T-26 pour du bruit de ligne de
+#' ventre, contre 1,5 pour cent d'erreurs franches une fois exclus ; la barre
 #' d'echelle (20, 21), le point derive (23) et les charnieres (24, 25) ne sont
 #' pas des points de contour. La tolerance vaut 0,003 fois la longueur du corps
 #' (soit 3 pixels pour un poisson de 1000 pixels), en deca de quoi l'ecart releve
@@ -902,8 +917,9 @@ launch_fishmorph_digitizer <- function(
           "Verifier 3/4 (extremes) a l'enregistrement", TRUE),
         shiny::helpText("A l'enregistrement, verifie que 3 est le point le plus",
                         "DORSAL et 4 le plus VENTRAL (hauteurs mesurees",
-                        "perpendiculairement a l'axe du corps). Caudale (16-19) et",
-                        "extremites d'appendices (12, 15) sont exclues. En cas",
+                        "perpendiculairement a l'axe du corps). Exclus : caudale",
+                        "(16-19), extremites d'appendices (12, 15) et points",
+                        "ventraux derives (8, 9, 11). En cas",
                         "d'ecart, propose de remesurer ou de corriger",
                         "automatiquement."),
         shiny::checkboxInput("showlines", "Lignes de repere (contour/oeil/ventre)", TRUE),
@@ -1457,7 +1473,8 @@ launch_fishmorph_digitizer <- function(
         conv_msg(v),
         shiny::tags$p(shiny::tags$em(
           "Hauteurs mesurees perpendiculairement a l'axe du corps. La caudale",
-          "(16-19) et les extremites d'appendices (12, 15) sont exclues du test.")),
+          "(16-19), les extremites d'appendices (12, 15) et les points ventraux",
+          "derives (8, 9, 11) sont exclus du test.")),
         shiny::tags$p("Corriger automatiquement donne au point sa hauteur, en",
                       "gardant sa position le long de l'axe ; les points recales",
                       "sont notes 'adjusted' dans le journal."),

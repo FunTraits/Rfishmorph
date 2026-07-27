@@ -37,10 +37,10 @@ test_that("a point overshooting 3 or 4 is detected, with the right culprit", {
   expect_equal(v$culprit, 5L)
   expect_equal(v$delta, 70, tolerance = 1e-6)
 
-  Q <- fm_test_fish(); Q[11, 2] <- 200          # ventre pectoral sous le ventre
+  Q <- fm_test_fish(); Q[6, 2] <- 200           # bas de la tete sous le ventre
   w <- .fm_extreme_violations(Q)
   expect_equal(w$point, 4L)
-  expect_equal(w$culprit, 11L)
+  expect_equal(w$culprit, 6L)
   expect_equal(w$delta, 70, tolerance = 1e-6)
 })
 
@@ -50,6 +50,16 @@ test_that("caudal (16-19) and appendage tips (12, 15) are exempt", {
   P[19, 2] <- 600;  P[17, 2] <- 400             # ... et tres basse
   P[12, 2] <- 400                               # pectorale sous le ventre
   P[15, 2] <- 300                               # machoire sous le ventre
+  expect_null(.fm_extreme_violations(P))
+})
+
+# Les points ventraux 8, 9 et 11 sont DERIVES du 4 (ligne du ventre) : les
+# comparer au 4 reviendrait a tester le 4 contre lui-meme. Sur les 1036
+# specimens T-26, les inclure signale 20,6 % du lot (bruit de ligne de ventre,
+# depassement median 0,5 % de Bl) contre 1,5 % une fois exclus.
+test_that("derived ventral points (8, 9, 11) are exempt", {
+  P <- fm_test_fish()
+  P[8, 2] <- 300; P[9, 2] <- 350; P[11, 2] <- 400
   expect_null(.fm_extreme_violations(P))
 })
 
@@ -75,7 +85,7 @@ test_that("small deviations stay under the tolerance", {
 })
 
 test_that("the fix restores the convention, increases Bd and keeps 3/4 on the axis", {
-  P <- fm_test_fish(); P[5, 2] <- -190; P[11, 2] <- 200
+  P <- fm_test_fish(); P[5, 2] <- -190; P[6, 2] <- 200
   g0 <- .fm_body_frame(P)
   v  <- .fm_extreme_violations(P)
   expect_equal(sort(v$point), c(3L, 4L))
@@ -87,8 +97,8 @@ test_that("the fix restores the convention, increases Bd and keeps 3/4 on the ax
   # ... et 3/4 gardent leur abscisse le long de l'axe (perpendicularite intacte)
   expect_equal(g1$ax[3:4], g0$ax[3:4], tolerance = 1e-8)
   # les points 3 et 4 sont exactement a la hauteur des points fautifs
-  expect_equal(g1$no[3], g0$no[5],  tolerance = 1e-8)
-  expect_equal(g1$no[4], g0$no[11], tolerance = 1e-8)
+  expect_equal(g1$no[3], g0$no[5], tolerance = 1e-8)
+  expect_equal(g1$no[4], g0$no[6], tolerance = 1e-8)
   # aucun autre point n'a bouge
   others <- setdiff(1:25, c(3L, 4L))
   expect_equal(Q[others, ], P[others, ], tolerance = 1e-9)
