@@ -375,6 +375,14 @@
 # tolerance par defaut, en FRACTION de la corde 1-2 : 0.3 % de Bl (soit ~6 px
 # pour un poisson de 2000 px). En deca, l'ecart releve du bruit de clic.
 .FM_EXTREME_TOL <- 0.003
+# PLANCHER absolu, en pixels. Sur une petite image la tolerance relative tombe
+# sous le bruit de clic (0.003 * 600 px = 1.8 px) et un depassement de 2 px
+# suffirait a declencher l'alerte -- c'est du bruit, pas une erreur. Fixe a 5 px
+# sur les donnees T-26 : les specimens conformes plafonnent a -0.4 px de
+# depassement (p98) et le plus petit ecart REEL vaut 11.8 px. Entre 1 et 8 px de
+# plancher, le nombre de specimens signales ne bouge pas (16) : la bande est
+# vide, 5 px tombe au milieu et ne coute donc aucune detection.
+.FM_EXTREME_FLOOR <- 5
 
 # libelles des points, pour les messages de l'application
 .FM_PT_LABELS <- c(
@@ -420,7 +428,7 @@
 # `delta` (depassement en pixels).
 .fm_extreme_violations <- function(P, tol_frac = .FM_EXTREME_TOL) {
   g <- .fm_body_frame(P); if (is.null(g)) return(NULL)
-  tol  <- max(1, tol_frac * g$L)
+  tol  <- max(.FM_EXTREME_FLOOR, tol_frac * g$L)
   cand <- setdiff(seq_len(nrow(P)), c(3L, 4L, .FM_EXTREME_EXCLUDE))
   cand <- cand[is.finite(g$no[cand])]
   if (!length(cand)) return(NULL)

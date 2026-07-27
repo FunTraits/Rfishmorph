@@ -84,6 +84,19 @@ test_that("small deviations stay under the tolerance", {
   expect_false(is.null(.fm_extreme_violations(P)))
 })
 
+# Le plancher absolu protege les PETITES images, ou la tolerance relative
+# tomberait sous le bruit de clic. Sur les donnees T-26 les specimens conformes
+# plafonnent a -0.4 px de depassement et le plus petit ecart reel vaut 11.8 px :
+# la bande 1-8 px est vide, le plancher n'y coute aucune detection.
+test_that("the absolute floor protects small photographs", {
+  P <- fm_test_fish()
+  P[, ] <- P[, ] / 4                            # poisson de 250 px : 0.003*L < 1
+  P[5, 2] <- P[3, 2] - 3                        # 3 px de depassement = bruit
+  expect_null(.fm_extreme_violations(P))
+  P[5, 2] <- P[3, 2] - 40                       # ... 40 px = erreur franche
+  expect_false(is.null(.fm_extreme_violations(P)))
+})
+
 test_that("the fix restores the convention, increases Bd and keeps 3/4 on the axis", {
   P <- fm_test_fish(); P[5, 2] <- -190; P[6, 2] <- 200
   g0 <- .fm_body_frame(P)

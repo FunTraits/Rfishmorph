@@ -5,9 +5,9 @@
 * `launch_fishmorph_digitizer()` now verifies, when "Enregistrer & suivant" is
   pressed, that landmark 3 is the most **dorsal** and landmark 4 the most
   **ventral** point of the body outline — the definition of `Bd` as the maximum
-  body depth. A specimen whose 5 (head top) sits above 3, or whose 11 (belly at
-  the pectoral) sits below 4, silently under-estimates `Bd`; this is now caught
-  before anything reaches the journal or the workbook.
+  body depth. A specimen whose 5 (head top) sits above 3, or whose 6 (head
+  bottom) sits below 4, silently under-estimates `Bd`; this is now caught before
+  anything reaches the journal or the workbook.
 * On violation a dialog offers three routes: **remeasure** (the offending point
   becomes active and the view centres on it), **auto-correct** (3, resp. 4, takes
   the height of the point overshooting it while keeping its position along the
@@ -29,6 +29,11 @@
   overshoot of 6.8% of `Bl`, with a flag rate flat from 0.003 to 0.02 `Bl`.
   The comparison set is therefore 1, 2, 5, 6, 7, 10, 13, 14, 22 -- the landmarks
   that are independent measurements on the body outline.
+* Tolerance is `max(5 px, 0.003 * Bl)`. The 5 px absolute floor matters on small
+  photographs, where the relative term falls below click noise. It is free:
+  compliant T-26 specimens top out at -0.4 px of overshoot (p98) while the
+  smallest real breach is 11.8 px, so any floor from 1 to 8 px flags the same
+  16 specimens.
 * The check is toggled by the new "Verifier 3/4 (extremes) a l'enregistrement"
   box (on by default).
 * New journal status **`"adjusted"`** for points relocated by that automatic

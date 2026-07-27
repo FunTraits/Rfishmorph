@@ -94,7 +94,10 @@ la position relative de 3 et 4, ce qui rend le controle valable quelle que
 soit l'orientation (tete a gauche ou a droite, photo retournee, case
 "Inverser dorsal/ventral" cochee). Sont EXCLUS de la comparaison le pedoncule
 et la nageoire caudale (16-19), qui depassent le corps par definition, ainsi
-que les extremites d'appendices (12 pectorale, 15 machoire) ; la barre
+que les extremites d'appendices (12 pectorale, 15 machoire) et les points
+ventraux DERIVES (8, 9, 11), calcules depuis le 4 lui-meme -- les inclure
+signalerait 20,6 pour cent des specimens T-26 pour du bruit de ligne de
+ventre, contre 1,5 pour cent d'erreurs franches une fois exclus ; la barre
 d'echelle (20, 21), le point derive (23) et les charnieres (24, 25) ne sont
 pas des points de contour. La tolerance vaut 0,003 fois la longueur du corps
 (soit 3 pixels pour un poisson de 1000 pixels), en deca de quoi l'ecart releve
