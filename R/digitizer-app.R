@@ -418,6 +418,66 @@
 # convention, not a preference; the residue is worth looking at one by one.
 .FM_EYE_ORDER <- c(5L, 13L, 7L, 14L, 6L, 8L)   # dorsal -> ventral
 
+# --- COINCIDENT POINTS: a measurement of zero ---------------------------------
+# Some segments are legitimately ZERO on some species, and a zero is a
+# measurement like any other -- neither a missing value nor a placement error.
+# The FISHMORPH heights read from the ventral profile vanish when the structure
+# sits ON that profile (`OGp = 0` for a mouth at the bottom, `PFv = 0` for a
+# pectoral fin inserted on the belly); the bottom of the head can be exactly the
+# body underside; an eye reaching the top of the head puts 5 on 13.
+#
+# NOTHING IS DELETED. Both points keep a position, both are drawn on the
+# photograph and both are written to the workbook -- one simply takes the
+# coordinates of the other, so the segment between them measures zero. A
+# coincidence is a measurement; an absence is NA, and the two must not be
+# confused downstream.
+#
+# In "reconstruct" mode a zero already comes from the workbook: .fm_place()
+# reads Mo2 = 0 and puts 9 on 1 by construction. These rules are for the two
+# other queues -- "new", where the points are seeded from medians, and
+# "correct", where a specimen is being repaired -- and they are RE-APPLIED at
+# the end of recon(), after .fm_constrain() and after point 23 is recomputed,
+# because the constrained editing re-derives the ventral points on the belly
+# line and would undo them at the next click.
+#
+# Which point moves is a protocol decision, not an aesthetic one, and it is not
+# the same for every rule. For the mouth the fixed point is 1, the snout, an
+# anatomical landmark that must not move -- and 23, built on the line (1, 9),
+# is undefined once 9 sits on 1, so it follows 1 rather than becoming NA. For
+# the two ventral rules it is the BELLY LINE that holds: 8 and 11 are its
+# intersections with the eye and the pectoral verticals, so the head bottom (6)
+# and the fin insertion (10) come onto them rather than the reverse -- the
+# ventral profile is a global fit, steadier than a single click. For the eye at
+# the top of the head, 5 (the head outline) comes onto 13, since moving 13 would
+# change Ed, a measurement in its own right.
+.FM_COLLAPSE <- list(
+  Mo  = list(from = c(9L, 23L), to = 1L, label = "Mo = 0 (mouth on the belly)",
+             tip = "9 and 23 take the coordinates of 1: mouth height nil, OGp = 0"),
+  Hd6 = list(from = 6L, to = 8L, label = "6 = 8 (head bottom on the belly)",
+             tip = "6 takes the coordinates of 8: the head ends on the ventral profile"),
+  PFi = list(from = 10L, to = 11L, label = "PFi = 0 (pectoral on the belly)",
+             tip = "10 takes the coordinates of 11: insertion on the ventral profile, PFv = 0"),
+  EyeTop = list(from = 5L, to = 13L, label = "5 = 13 (eye at the head top)",
+                tip = "5 takes the coordinates of 13: the eye reaches the dorsal profile")
+)
+
+# Apply the active rules. A rule whose reference is not placed is skipped: a
+# zero is only meaningful once the point it is measured from exists.
+.fm_apply_collapse <- function(P, active) {
+  if (is.null(P) || !length(active)) return(P)
+  for (nm in intersect(active, names(.FM_COLLAPSE))) {
+    r <- .FM_COLLAPSE[[nm]]
+    if (r$to <= nrow(P) && all(is.finite(P[r$to, ])))
+      for (f in r$from) if (f <= nrow(P)) P[f, ] <- P[r$to, ]
+  }
+  P
+}
+.fm_collapse_points <- function(active) {
+  if (!length(active)) return(integer(0))
+  unlist(lapply(.FM_COLLAPSE[intersect(active, names(.FM_COLLAPSE))],
+                function(r) r$from), use.names = FALSE)
+}
+
 # labels of the points, for the application's messages
 .FM_PT_LABELS <- c(
   "1" = "snout", "2" = "caudal-fin base", "3" = "back (Bd upper)",
@@ -684,6 +744,40 @@
 #' Points that were snapped carry the status `"adjusted"` in the journal,
 #' distinct from `"placed"`: the automatic correction stays traceable specimen
 #' by specimen.
+#'
+#' @section Coincident points, a measurement of zero:
+#' A bar under the photograph declares the segments that are ZERO on the species
+#' in view. A zero is a measurement like any other -- neither a missing value nor
+#' a placement error -- and the FISHMORPH ratios are defined to take it:
+#' `OGp = 0` for a mouth opening on the ventral profile, `PFv = 0` for a
+#' pectoral fin inserted on the belly. Four rules are offered: `Mo = 0` (9, and
+#' 23, take the coordinates of 1), `6 = 8` (the bottom of the head is the body
+#' underside), `PFi = 0` (10 takes the coordinates of 11) and `5 = 13` (an eye
+#' reaching the top of the head).
+#'
+#' Nothing is deleted. Both points keep a position, both are drawn on the
+#' photograph and both are written to the workbook; one simply takes the
+#' coordinates of the other, so the segment between them measures zero. A
+#' coincidence is a measurement, an absence is `NA`, and the two must not be
+#' confused downstream.
+#'
+#' In `"reconstruct"` mode a zero already comes from the workbook, since the
+#' points are laid out from the measured segments. The rules are for `"new"`,
+#' where the points are seeded from medians, and `"correct"`, where a specimen
+#' is being repaired. They are applied at the very end of the reconstruction,
+#' after the constrained editing and after point 23 is rebuilt, which would
+#' otherwise re-derive the ventral points on the belly line at the next click.
+#'
+#' Which point moves is a protocol decision and is not the same for every rule.
+#' For the mouth the fixed point is 1, the snout, an anatomical landmark that
+#' must not move -- and 23, built on the line (1, 9), is undefined once 9 sits
+#' on 1, so it follows 1 rather than becoming `NA`. For the two ventral rules
+#' the belly line holds: 8 and 11 are its intersections with the eye and the
+#' pectoral verticals, so the head bottom and the fin insertion come onto them
+#' rather than the reverse. For the eye at the top of the head, 5 comes onto 13,
+#' since moving 13 would change `Ed`, a measurement in its own right. Points
+#' moved by a rule take the `"adjusted"` status in the journal, and the
+#' declarations are reset for every species.
 #'
 #' The same box also checks the ORDER of the eye vertical. The six points 5, 13,
 #' 7, 14, 6, 8 are placed on one vertical by the FISHMORPH conventions, and
@@ -1020,6 +1114,10 @@ launch_fishmorph_digitizer <- function(
     "cursor:pointer;}",
     # floor under the photograph: a narrower device draws nothing useful
     "#plot{min-width:360px;min-height:360px;}",
+    ".collapsebar{margin:8px 0 10px 0;padding:6px 10px;background:#fffbeb;",
+    "border:1px solid #fde68a;border-radius:8px;font-size:13px;}",
+    ".collapsebar .form-group{margin-bottom:0;}",
+    ".collapsebar .checkbox-inline{margin-right:14px;font-size:12.5px;}",
     "#set_na{font-weight:600;}",
     ".app-title{font-family:'Inter','SF Pro Display','Segoe UI Variable',",
     "'Helvetica Neue',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;",
@@ -1196,6 +1294,23 @@ launch_fishmorph_digitizer <- function(
     shiny::uiOutput("lm_buttons"),
     shiny::plotOutput("plot", height = "620px", click = "click",
       dblclick = "img_dblclick"),
+    # --- coincident points, immediately under the photograph ------------------
+    # A zero is a measurement, and it is decided while looking at the fish -- so
+    # the switch belongs under the photograph and not in a settings tab. It is
+    # reset for every specimen: a mouth on the belly is a statement about THIS
+    # species. Neither point is removed: one takes the coordinates of the other,
+    # both stay on the photograph and both are written to the workbook.
+    shiny::div(
+      class = "collapsebar",
+      shiny::div(style = "display:inline-block;vertical-align:middle;margin-right:10px;",
+                 shiny::tags$strong("Coincident points:")),
+      shiny::div(style = "display:inline-block;vertical-align:middle;",
+                 shiny::checkboxGroupInput(
+                   "collapse", NULL, inline = TRUE,
+                   choiceNames = unname(vapply(.FM_COLLAPSE, function(r) r$label,
+                                               character(1))),
+                   choiceValues = names(.FM_COLLAPSE))),
+      shiny::uiOutput("collapse_help")),
     shiny::fluidRow(
       shiny::column(7, card_box("Control: target vs. reconstructed segment (px)",
                                 shiny::tableOutput("rt"))),
@@ -1240,8 +1355,9 @@ launch_fishmorph_digitizer <- function(
       flushstamp = 0L,       # incremented at every write of the workbook
       edited = integer(0),   # points MOVED by the user during this session
                              # (as opposed to points merely loaded from the workbook)
-      adjusted = integer(0)) # points snapped by the extreme-point convention
+      adjusted = integer(0), # points snapped by the extreme-point convention
                              # (status "adjusted" in the journal)
+      collapse = character(0))  # segments declared zero on THIS specimen
 
     # queue and direct-access list of the current mode. In "new" mode the queue
     # indexes the PHOTOGRAPHS of new_photo_dir (and not rows of lm_df).
@@ -1407,6 +1523,9 @@ launch_fishmorph_digitizer <- function(
     load_species <- function() {
       rv$A <- NULL; rv$B <- NULL; rv$P <- NULL; rv$override <- list(); rv$na <- integer(0)
       rv$edited <- integer(0); rv$adjusted <- integer(0)
+      # A declared zero is a statement about ONE species: it never carries over.
+      rv$collapse <- character(0)
+      shiny::updateCheckboxGroupInput(session, "collapse", selected = character(0))
       rv$sel <- 1L; rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL
       if (!length(qrows())) { rv$img <- NULL; rv$arr <- NULL; return() }
       path <- cur_photo()
@@ -1486,7 +1605,35 @@ launch_fishmorph_digitizer <- function(
         P <- .fm_constrain(P, rv$edited, pfl_px = pfl_px)
       }
       P[23, ] <- .fm_point23(P)     # 23 always recomputed (auto) after editing/conventions
-      P
+      # LAST, after the conventions AND after 23 is rebuilt: the conventions
+      # re-derive the ventral points on the belly line, and 23 -- built on the
+      # line (1, 9) -- is undefined once 9 sits on 1. Applying the rules here is
+      # what puts 23 on 1 instead of leaving it NA.
+      .fm_apply_collapse(P, rv$collapse)
+    })
+
+    # The declared zeros. recon() applies them, so the only state needed here is
+    # the list itself; the points a rule moves are marked "adjusted" -- placed by
+    # a rule the operator invoked, neither pointed at nor left at their seed.
+    shiny::observeEvent(input$collapse, {
+      rv$collapse <- input$collapse %||% character(0)
+      moved <- .fm_collapse_points(rv$collapse)
+      released <- setdiff(.fm_collapse_points(names(.FM_COLLAPSE)), moved)
+      rv$adjusted <- union(setdiff(rv$adjusted, released), moved)
+      rv$edited   <- setdiff(rv$edited, moved)
+      rv$override[as.character(moved)] <- NULL   # the rule drives them now
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+    output$collapse_help <- shiny::renderUI({
+      act <- rv$collapse
+      txt <- if (!length(act))
+        paste("A segment that is genuinely zero on this species -- a mouth on",
+              "the ventral profile, a head ending on it. One point takes the",
+              "coordinates of the other: both stay on the photograph and in the",
+              "workbook. Re-applied after every click, reset for each species.")
+      else paste("Active:", paste(vapply(.FM_COLLAPSE[act], function(r) r$tip,
+                                         character(1)), collapse = " | "))
+      shiny::div(style = "font-size:11.5px;color:#92400e;margin-top:2px;", txt)
     })
 
     # centres the zoom on the active point (when it has a position)
@@ -1981,7 +2128,27 @@ launch_fishmorph_digitizer <- function(
                              col = "#00a06a", lwd = 3)
         lp <- lm_pts()
         graphics::points(P[lp,1], P[lp,2], pch = 21, bg = "white", cex = 1.2)
-        graphics::text(P[lp,1], P[lp,2], lp, pos = 3, cex = .7, col = "yellow")
+        # COINCIDENT POINTS. Two points at the same pixel draw one circle on top
+        # of the other and one label over the other, so a legitimate zero LOOKS
+        # like a lost point. Both are here; the drawing has to say so. A group
+        # gets a wider ring and ONE label carrying every number it holds
+        # ("10+11"), instead of stacking illegible labels.
+        lpf <- lp[vapply(lp, function(i) i <= nrow(P) && all(is.finite(P[i, ])),
+                         logical(1))]
+        if (length(lpf)) {
+          grp <- split(lpf, paste(round(P[lpf,1], 1), round(P[lpf,2], 1)))
+          single <- unlist(grp[lengths(grp) == 1L], use.names = FALSE)
+          if (length(single))
+            graphics::text(P[single,1], P[single,2], single, pos = 3, cex = .7,
+                           col = "yellow")
+          for (g in grp[lengths(grp) > 1L]) {
+            xy <- P[g[1], ]
+            graphics::points(xy[1], xy[2], pch = 1, col = "yellow", cex = 2.4, lwd = 2)
+            graphics::points(xy[1], xy[2], pch = 1, col = "black",  cex = 3.0, lwd = 1)
+            graphics::text(xy[1], xy[2], paste(sort(g), collapse = "+"), pos = 3,
+                           cex = .75, font = 2, col = "yellow")
+          }
+        }
         # extra hinges (24, 25) placed: drawn in gold
         xh <- setdiff(.FM_HINGES, lp)
         xh <- xh[vapply(xh, function(i) i <= nrow(P) && all(is.finite(P[i, ])), logical(1))]

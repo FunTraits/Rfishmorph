@@ -1,5 +1,37 @@
 # Rfishmorph 0.4.0
 
+## Coincident points: a measurement of zero
+
+* A bar under the photograph declares the segments that are ZERO on the species
+  in view. A zero is a measurement like any other -- neither a missing value nor
+  a placement error -- and the FISHMORPH ratios are defined to take it:
+  `OGp = 0` for a mouth opening on the ventral profile, `PFv = 0` for a pectoral
+  fin inserted on the belly. Four rules: **`Mo = 0`** (9, and 23, take the
+  coordinates of 1), **`6 = 8`** (the bottom of the head is the body underside),
+  **`PFi = 0`** (10 takes the coordinates of 11) and **`5 = 13`** (an eye
+  reaching the top of the head).
+* **Nothing is deleted.** Both points keep a position, both are drawn on the
+  photograph and both are written to the workbook; one simply takes the
+  coordinates of the other, so the segment between them measures zero. A
+  coincidence is a measurement, an absence is `NA`, and the two must not be
+  confused downstream.
+* In `"reconstruct"` mode a zero already comes from the workbook -- the points
+  are laid out from the measured segments. The rules are for `"new"`, where the
+  points are seeded from medians, and `"correct"`, where a specimen is being
+  repaired. They are applied at the END of `recon()`, after `.fm_constrain()`
+  and after point 23 is rebuilt, because the constrained editing re-derives the
+  ventral points on the belly line at every click.
+* Which point moves is a protocol decision and is not the same for every rule.
+  For the mouth the fixed point is 1, the snout -- and 23, built on the line
+  (1, 9), is undefined once 9 sits on 1, so it follows 1 rather than becoming
+  `NA`. For the two ventral rules the belly line holds: 8 and 11 are its
+  intersections with the eye and the pectoral verticals, so the head bottom and
+  the fin insertion come onto them. For the eye at the top of the head, 5 comes
+  onto 13, since moving 13 would change `Ed`, a measurement in its own right.
+* Points moved by a rule take the `"adjusted"` status in the journal, whose
+  meaning widens accordingly: placed by a rule the operator invoked, neither
+  pointed at nor left at a seed. Declarations are reset for every species.
+
 ## The eye vertical is checked, in order
 
 * The save-time check now also verifies the ORDER of the six points that the

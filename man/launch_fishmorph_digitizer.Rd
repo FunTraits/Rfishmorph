@@ -105,6 +105,42 @@ below which the discrepancy is click noise.
 Points that were snapped carry the status \code{"adjusted"} in the journal,
 distinct from \code{"placed"}: the automatic correction stays traceable specimen
 by specimen.
+}
+
+\section{Coincident points, a measurement of zero}{
+
+A bar under the photograph declares the segments that are ZERO on the species
+in view. A zero is a measurement like any other -- neither a missing value nor
+a placement error -- and the FISHMORPH ratios are defined to take it:
+\code{OGp = 0} for a mouth opening on the ventral profile, \code{PFv = 0} for a
+pectoral fin inserted on the belly. Four rules are offered: \code{Mo = 0} (9, and
+23, take the coordinates of 1), \code{6 = 8} (the bottom of the head is the body
+underside), \code{PFi = 0} (10 takes the coordinates of 11) and \code{5 = 13} (an eye
+reaching the top of the head).
+
+Nothing is deleted. Both points keep a position, both are drawn on the
+photograph and both are written to the workbook; one simply takes the
+coordinates of the other, so the segment between them measures zero. A
+coincidence is a measurement, an absence is \code{NA}, and the two must not be
+confused downstream.
+
+In \code{"reconstruct"} mode a zero already comes from the workbook, since the
+points are laid out from the measured segments. The rules are for \code{"new"},
+where the points are seeded from medians, and \code{"correct"}, where a specimen
+is being repaired. They are applied at the very end of the reconstruction,
+after the constrained editing and after point 23 is rebuilt, which would
+otherwise re-derive the ventral points on the belly line at the next click.
+
+Which point moves is a protocol decision and is not the same for every rule.
+For the mouth the fixed point is 1, the snout, an anatomical landmark that
+must not move -- and 23, built on the line (1, 9), is undefined once 9 sits
+on 1, so it follows 1 rather than becoming \code{NA}. For the two ventral rules
+the belly line holds: 8 and 11 are its intersections with the eye and the
+pectoral verticals, so the head bottom and the fin insertion come onto them
+rather than the reverse. For the eye at the top of the head, 5 comes onto 13,
+since moving 13 would change \code{Ed}, a measurement in its own right. Points
+moved by a rule take the \code{"adjusted"} status in the journal, and the
+declarations are reset for every species.
 
 The same box also checks the ORDER of the eye vertical. The six points 5, 13,
 7, 14, 6, 8 are placed on one vertical by the FISHMORPH conventions, and
