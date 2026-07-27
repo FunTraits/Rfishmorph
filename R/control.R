@@ -203,9 +203,9 @@ compare_segments_landmarks <- function(landmarks, published, id_col = NULL,
       grp_f <- if (!is.null(grp)) factor(grp) else NULL
       imp_ratios <- function(df) {
         X <- as.matrix(df[rn]); storage.mode(X) <- "double"
-        # `ids` porte les valeurs de `id_col`, donc les especes : c'est la cle
-        # dont "missforest_phylo" a besoin pour retrouver ses axes. `grp_f`, lui,
-        # vient de `group_col` (Order, Family...) et n'est qu'un predicteur.
+        # `ids` carries the values of `id_col`, hence the species: that is the
+        # key "missforest_phylo" needs to find its axes. `grp_f` comes from
+        # `group_col` (Order, Family, ...) and is only a predictor.
         res <- .apply_na_action(X, grp_f, na_action,
                                 missforest_ntree = missforest_ntree,
                                 missforest_maxiter = missforest_maxiter,

@@ -35,8 +35,8 @@
 #' small <- load_fishmorph_reference("sample")  # 400 species
 #' @export
 load_fishmorph_reference <- function(file = NULL, sheet = NULL) {
-  # Raccourcis symboliques : evite d'imposer system.file() a l'appelant pour un
-  # fichier que le package embarque de toute facon.
+  # Symbolic shortcuts: they spare the caller a system.file() call for a file
+  # the package bundles anyway.
   if (is.null(file) || identical(file, "full")) file <- "fishmorph_data.csv"
   else if (identical(file, "sample")) file <- "fishmorph_reference_sample.csv"
 
@@ -138,9 +138,9 @@ fishmorph_trait_space <- function(data, traits = fishmorph_ratio_names(),
   if (length(miss))
     stop("Trait column(s) not found: ", paste(miss, collapse = ", "),
          call. = FALSE)
-  # `species` (cle des axes phylogenetiques) est detecte automatiquement ;
-  # `groups` (predicteur categoriel / coloration) ne l'est plus : le remplir avec
-  # les especes revenait a passer des milliers de niveaux a randomForest.
+  # `species` (the key to the phylogenetic axes) is detected automatically;
+  # `groups` (a categorical predictor / colouring) no longer is: filling it with
+  # the species amounted to handing randomForest thousands of levels.
   if (is.null(species)) {
     sc <- intersect(c("Genus.species", "Species", "species"), names(data))[1]
     if (!is.na(sc)) species <- data[[sc]]

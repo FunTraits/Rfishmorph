@@ -2,7 +2,7 @@
 % Please edit documentation in R/database.R
 \name{fishmorph_build_db}
 \alias{fishmorph_build_db}
-\title{Reconstruit la base DuckDB a partir des journaux}
+\title{Rebuild the DuckDB database from the journals}
 \usage{
 fishmorph_build_db(
   journal_dir,
@@ -13,22 +13,22 @@ fishmorph_build_db(
 )
 }
 \arguments{
-\item{journal_dir}{Dossier des journaux (ou data.frame long deja lu).}
+\item{journal_dir}{Journal directory (or an already-read long data.frame).}
 
-\item{db_path}{Chemin du fichier .duckdb. NULL -> pas de base sur disque, tout
-se fait en memoire (utile pour valider sans rien ecrire).}
+\item{db_path}{Path of the .duckdb file. NULL -> no database on disk,
+everything happens in memory (useful to validate without writing anything).}
 
-\item{export_dir}{Dossier d'export Parquet + CSV. NULL -> pas d'export.}
+\item{export_dir}{Directory for the Parquet + CSV export. NULL -> no export.}
 
-\item{validate}{TRUE -> lance fishmorph_validate() et joint le rapport.}
+\item{validate}{TRUE -> run fishmorph_validate() and attach the report.}
 
-\item{stop_on_error}{TRUE -> interrompt si des anomalies de severite "erreur"
-sont detectees, AVANT d'ecrire quoi que ce soit.}
+\item{stop_on_error}{TRUE -> abort if anomalies of severity "error" are
+detected, BEFORE writing anything.}
 }
 \value{
-Liste invisible : \code{db_path}, \code{n_specimens}, \code{n_points}, \code{issues}.
+An invisible list: \code{db_path}, \code{n_specimens}, \code{n_points}, \code{issues}.
 }
 \description{
-Idempotent : deux appels successifs donnent la meme base. La base precedente
-est ecrasee (c'est un artefact derive), jamais mise a jour en place.
+Idempotent: two successive calls give the same database. The previous
+database is overwritten (it is a derived artefact), never updated in place.
 }

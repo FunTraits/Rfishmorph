@@ -1,87 +1,87 @@
 # =============================================================================
-# fishmorph_reconstruct_app.R
+# digitizer-app.R
 #
-# Outil interactif : placer les segments FISHMORPH sur la photo d'une espece,
-# les transformer en 21 landmarks (points 1-19 + 22 + 23) et les enregistrer
-# dans la feuille "Global_Landmark" d'une COPIE du classeur.
-# 23 = point derive (auto) : intersection de la droite (1,9) et de la droite
-#      passant par 6 parallele a l'axe (1,2) -> distance museau -> base tete.
+# Interactive tool: place the FISHMORPH segments on a species photograph, turn
+# them into 21 landmarks (points 1-19 + 22 + 23) and record them in the
+# "Global_Landmark" sheet of a COPY of the workbook.
+# 23 = derived point (automatic): intersection of the line (1,9) with the line
+#      through 6 parallel to the axis (1,2) -> snout -> head-base distance.
 #
-# Entree  : FISHMORPH_PUBLI_9556sp.xlsx  (feuille 1 "Global_segments",
-#           feuille 2 "Global_Landmark") + dossier "Photos utilisees".
-# Sortie  : copie "..._reconstructed.xlsx", feuille 2 completee ligne par ligne.
+# Input  : FISHMORPH_PUBLI_9556sp.xlsx  (sheet 1 "Global_segments",
+#           sheet 2 "Global_Landmark") + the "Photos utilisees" folder.
+# Output : the copy "..._reconstructed.xlsx", sheet 2 filled row by row.
 #
-# Trois modes (bouton "Mode", ou arg `mode=`) :
-#   * "reconstruct" : file des especes SANS landmarks (a digitaliser).
-#   * "correct"     : file des especes DEJA landmarkees (relecture/correction) ;
-#                     les 21 points sont recharges du classeur et repositionnables,
-#                     puis "Enregistrer & suivant" reecrit la ligne.
-#   * "new"         : file des PHOTOS NOUVELLES (dossier `new_photo_dir`), non
-#                     presentes dans le classeur. Aucun segment n'existe : les
-#                     points sont amorces par les PROPORTIONS MEDIANES du jeu
-#                     FISHMORPH (voir .FM_NEW_RATIOS) apres les clics museau (1)
-#                     et base caudale (2), puis places a la main. Le nom d'espece
-#                     est saisi dans un champ (pre-rempli depuis le nom de
-#                     fichier). LM20/21 (barre d'echelle, optionnels) s'ajoutent a
-#                     l'ordre de saisie et donnent mm_per_px. L'enregistrement se
-#                     fait dans la feuille `new_sheet` ("new_specimens"), en
-#                     ajoutant une ligne (ou en la reecrivant si la photo y est
-#                     deja, cle = colonne photo_file).
+# Three modes (the "Queue" selector, or the `mode=` argument):
+#   * "reconstruct" : queue of species WITHOUT landmarks (to be digitized).
+#   * "correct"     : queue of species ALREADY landmarked (review/correction);
+#                     the 21 points are reloaded from the workbook and can be
+#                     moved, then "Save & next" rewrites the row.
+#   * "new"         : queue of NEW PHOTOGRAPHS (folder `new_photo_dir`), absent
+#                     from the workbook. No segment exists: the points are
+#                     seeded from the MEDIAN PROPORTIONS of the FISHMORPH set
+#                     (see .FM_NEW_RATIOS) after the snout (1) and caudal-base
+#                     (2) clicks, then placed by hand. The species name is
+#                     typed in a field (pre-filled from the file name). LM20/21
+#                     (scale bar, optional) join the entry order and give
+#                     mm_per_px. The record goes to the `new_sheet` sheet
+#                     ("new_specimens"), appending a row (or rewriting it if
+#                     the photograph is already there, key = the photo_file
+#                     column).
 #
-# Flux (mode reconstruct) :
-#   1. L'app construit la file des especes SANS landmarks, AVEC segments et
-#      AVEC une photo correspondante.
-#   2. Pour l'espece courante : cliquer le MUSEAU (LM1) puis la BASE CAUDALE
-#      (LM2) -> axe, position et echelle (px/unite) deduits de Bl.
-#   3. Les 20 points sont pre-places depuis les segments (longueurs
-#      verrouillees) ; on affine avec les curseurs (parametres non identifies)
-#      et, au besoin, en repositionnant un point precis au clic.
-#   4. "Enregistrer & suivant" verifie la convention des extremes (3 = point le
-#      plus dorsal, 4 = le plus ventral : voir .fm_extreme_violations), puis
-#      ecrit les X/Y dans la copie et passe a la suivante.
+# Flow (reconstruct mode):
+#   1. The app builds the queue of species WITHOUT landmarks, WITH segments and
+#      WITH a matching photograph.
+#   2. For the current species: click the SNOUT (LM1) then the CAUDAL BASE
+#      (LM2) -> axis, position and scale (px/unit) deduced from Bl.
+#   3. The 20 points are pre-placed from the segments (lengths locked); they
+#      are refined with the sliders (the parameters the segments leave free)
+#      and, where needed, by repositioning a given point with a click.
+#   4. "Save & next" checks the extreme-point convention (3 = the
+#      most dorsal point, 4 = the most ventral: see .fm_extreme_violations),
+#      then writes the X/Y into the copy and moves on to the next.
 #
-# Calibration des segments (verifiee sur les lignes deja digitalisees) :
-#   paires euclidiennes = Bl(1,2) Bd(3,4) Hd(5,6) Ed(13,14) Jl(1,15)
-#   PFl(10,12) CPd(16,17) CFd(18,19) ; et pour les hauteurs, on utilise les
-#   colonnes *2* : Eh2->(7,8)  Mo2->(1,9)  PFi2->(10,11)
-#   (Eh/Mo/PFi bruts NE sont PAS des distances entre paires dans ce fichier).
+# Calibration of the segments (checked against the rows already digitized):
+#   Euclidean pairs = Bl(1,2) Bd(3,4) Hd(5,6) Ed(13,14) Jl(1,15)
+#   PFl(10,12) CPd(16,17) CFd(18,19); and for the heights, the *2* columns are
+#   used: Eh2->(7,8)  Mo2->(1,9)  PFi2->(10,11)
+#   (raw Eh/Mo/PFi are NOT distances between pairs in this file).
 #
-# Convention de coordonnees : comme les lignes existantes, on enregistre en
-# pixels IMAGE (Y vers le bas : le haut du corps a un Y plus petit).
+# Coordinate convention: like the existing rows, everything is recorded in
+# IMAGE pixels (Y downwards: the top of the body has the smaller Y).
 #
-# Statut : PROTOTYPE. Dependances : shiny, openxlsx, jpeg, png.
+# Status: PROTOTYPE. Dependencies: shiny, openxlsx, jpeg, png.
 # =============================================================================
 
-# points enregistres dans la feuille 2 (ordre des colonnes _X/_Y)
-# 23 = point derive (auto) : intersection de la droite (1,9) et de la droite
-# passant par 6 parallele a l'axe (1,2) -> segment 23-6 parallele a (1,2).
+# points recorded in sheet 2 (order of the _X/_Y columns)
+# 23 = derived point (automatic): intersection of the line (1,9) with the line
+# through 6 parallel to the axis (1,2) -> segment 23-6 parallel to (1,2).
 .FM_LM_PTS <- c(1:19, 22L, 23L)
 
-# Version de l'outil de saisie, tracee dans CHAQUE ligne du journal : c'est elle
-# qui permettra, dans deux ans, de savoir avec quelle logique geometrique un
-# specimen donne a ete digitalise.
-# FONCTION et non constante : packageVersion() echouerait a l'installation, quand
-# ce fichier est evalue alors que le package n'est pas encore installe.
+# Version of the digitizing tool, traced in EVERY journal row: it is what will
+# make it possible, in two years' time, to know with which geometric logic a
+# given specimen was digitized.
+# A FUNCTION and not a constant: packageVersion() would fail at installation
+# time, when this file is evaluated while the package is not yet installed.
 .fm_app_version <- function()
   tryCatch(as.character(utils::packageVersion("Rfishmorph")),
            error = function(e) "dev")
 
-# La couche de capture (journal append-only) vit dans R/journal.R et fait partie
-# du meme package : plus rien a charger a la main.
+# The capture layer (append-only journal) lives in R/journal.R and is part of
+# the same package: there is nothing left to load by hand.
 
-# ordre de saisie au clic : d'abord l'axe brise museau -> 22 -> 24 -> caudale,
-# puis les points a poser a la main (avance automatique) ; .FM_DERIVED = derives.
+# click entry order: the broken axis first, snout -> 22 -> 24 -> caudal, then
+# the points to place by hand (auto-advance); .FM_DERIVED = derived points.
 .FM_CLICK_ORDER <- c(1L, 22L, 24L, 2L, 3L, 4L, 7L, 5L, 6L, 13L, 14L, 10L, 12L, 16L, 17L, 18L, 19L)
-# derives (auto) : 8/9/11 = points du ventre ; 15 seme. 10/12 restent dans la
-# boucle de saisie ; tant qu'ils ne sont pas cliques ils suivent 11 (PFi/PFl
-# conserves), et une fois places/corriges ils restent ou tu les mets.
-# 22 = CHARNIERE (n'est plus "derive") : affichee entre 1 et 2 et rendue active
-# a l'ouverture d'une espece en mode correction (voir seed_from_existing).
+# derived (automatic): 8/9/11 = belly points; 15 is seeded. 10/12 stay in the
+# entry loop; as long as they have not been clicked they follow 11 (PFi/PFl
+# preserved), and once placed or corrected they stay where you put them.
+# 22 = HINGE (no longer "derived"): shown between 1 and 2 and made active when
+# a species is opened in correction mode (see seed_from_existing).
 .FM_DERIVED     <- c(8L, 9L, 11L, 15L, 23L)
 
-# MODE "new" (photos nouvelles) : meme ordre + la barre d'echelle 20/21 a la fin.
-# 20/21 sont OPTIONNELS (on peut les laisser non poses) et servent uniquement a
-# calculer mm_per_px = ruler_mm / dist(20,21).
+# MODE "new" (new photographs): same order + the scale bar 20/21 at the end.
+# 20/21 are OPTIONAL (they may be left unplaced) and serve only to compute
+# mm_per_px = ruler_mm / dist(20,21).
 .FM_SCALE_PTS       <- c(20L, 21L)
 .FM_CLICK_ORDER_NEW <- c(.FM_CLICK_ORDER, .FM_SCALE_PTS)
 .FM_LM_PTS_NEW      <- c(.FM_LM_PTS, .FM_SCALE_PTS)
@@ -89,27 +89,27 @@
 .fm_next <- function(cur, order = .FM_CLICK_ORDER) {
   i <- match(cur, order)
   if (is.na(i)) return(cur)
-  if (i >= length(order)) return(3L)  # apres le dernier -> revient au 1er anatomique (3)
+  if (i >= length(order)) return(3L)  # after the last -> back to the 1st anatomical (3)
   order[i + 1L]
 }
 
-# --- proportions medianes FISHMORPH (mode "new", pas de segments) ------------
-# Medianes de segment/Bl calculees sur FishMORPH_seg.csv (n = 6492 a 7706 especes
-# selon le segment ; seules les valeurs > 0 sont retenues). Elles servent
-# UNIQUEMENT de graine : apres les clics 1 (museau) et 2 (base caudale), chaque
-# point est pre-place a la proportion mediane du corps, puis corrige au clic.
-# Aucune longueur n'est donc "verrouillee" dans ce mode, contrairement a
-# "reconstruct" ou les segments mesures contraignent les paires.
+# --- median FISHMORPH proportions ("new" mode, no segments) ------------------
+# Medians of segment/Bl computed on FishMORPH_seg.csv (n = 6,492 to 7,706
+# species depending on the segment; only values > 0 are kept). They serve ONLY
+# as a seed: after the clicks on 1 (snout) and 2 (caudal base), each point is
+# pre-placed at the median proportion of the body, then corrected with a click.
+# No length is therefore "locked" in this mode, unlike "reconstruct" where the
+# measured segments constrain the pairs.
 .FM_NEW_RATIOS <- c(Bd = 0.2480, Hd = 0.1382, Eh2 = 0.1372, Mo2 = 0.1152,
                     PFi2 = 0.0745, PFl = 0.1829, Ed = 0.0589, Jl = 0.0559,
                     CPd = 0.1055, CFd = 0.2593)
 
-# pseudo-segments pour .fm_place() : Bl = 1 -> ppu = Blpx, donc chaque longueur
-# vaut ratio * Blpx pixels. Exactement equivalent a passer des segments mesures.
+# pseudo-segments for .fm_place(): Bl = 1 -> ppu = Blpx, so each length is
+# ratio * Blpx pixels. Exactly equivalent to passing measured segments.
 .fm_new_segments <- function() c(list(Bl = 1), as.list(.FM_NEW_RATIOS))
 
-# nom d'espece propose a partir du nom de fichier photo :
-# "Abramis_brama_2.JPG" -> "Abramis brama" (genre capitalise, epithete minuscule)
+# species name proposed from the photograph file name:
+# "Abramis_brama_2.JPG" -> "Abramis brama" (genus capitalised, epithet lower)
 .fm_name_from_file <- function(path) {
   x <- tools::file_path_sans_ext(basename(path))
   x <- sub("\\s*\\d+$", "", x)
@@ -123,15 +123,16 @@
   paste(w, collapse = " ")
 }
 
-# points de CHARNIERE (axe brise). 22 est un landmark enregistre ; 24 et 25 sont
-# des charnieres SUPPLEMENTAIRES (pas de colonnes dans le classeur -> non
-# enregistrees, ce sont des aides de saisie pour quelques specimens tres
-# courbes). Places au besoin, ils permettent jusqu'a 4 segments d'axe
-# (1 -> ... -> 2). Non places, ils restent "en ligne" (aucun effet).
+# HINGE points (broken axis). 22 is a recorded landmark; 24 and 25 are EXTRA
+# hinges, entry aids for the few strongly curved specimens -- they are recorded
+# too (their columns are created in the workbook at start-up), because they
+# define the frames in which every convention was applied. Placed where needed,
+# they allow up to 4 axis segments (1 -> ... -> 2). Left unplaced, they stay
+# "in line" (no effect).
 .FM_HINGES <- c(22L, 24L, 25L)
 
-# chaine ordonnee de l'axe brise : 1, puis les charnieres POSEES triees selon
-# leur position le long de la corde 1->2, puis 2.
+# ordered chain of the broken axis: 1, then the hinges ACTUALLY PLACED, sorted
+# by their position along the chord 1->2, then 2.
 .fm_axis_chain <- function(P) {
   fin <- function(i) i <= nrow(P) && all(is.finite(P[i, ]))
   hs <- .FM_HINGES[vapply(.FM_HINGES, fin, logical(1))]
@@ -141,7 +142,7 @@
   }
   c(1L, hs, 2L)
 }
-# longueur (px) le long de l'axe brise (somme des segments de la chaine)
+# length (px) along the broken axis (sum of the segments of the chain)
 .fm_axis_len_px <- function(P) {
   ch <- .fm_axis_chain(P)
   if (length(ch) < 2) return(NA_real_)
@@ -149,7 +150,7 @@
              function(k) sqrt(sum((P[ch[k + 1L], ] - P[ch[k], ])^2)), numeric(1)))
 }
 
-# colonne de segment a utiliser pour chaque paire de landmarks
+# segment column to use for each pair of landmarks
 .FM_PAIR_SEG <- list(
   Bl  = list(seg = "Bl",   pair = c(1, 2)),
   Bd  = list(seg = "Bd",   pair = c(3, 4)),
@@ -164,11 +165,11 @@
   CFd = list(seg = "CFd",  pair = c(18, 19))
 )
 
-# parametres libres (non identifies par les segments) et valeurs par defaut.
-# Valeurs f (position axiale) et o (part dorsale) recalees sur les MEDIANES des
-# especes deja digitalisees du fichier (17 especes) -- les anciennes valeurs
-# (o_Hd=0.85, o_PF=0.90) placaient tete et pectorale trop haut. o_PF est negatif
-# car l'insertion pectorale est sous la ligne mediane du corps.
+# Free parameters (those the segments do not identify) and their defaults.
+# The f (axial position) and o (dorsal share) values were reset on the MEDIANS
+# of the species already digitized in the file (17 species) -- the former
+# values (o_Hd=0.85, o_PF=0.90) placed the head and the pectoral fin too high.
+# o_PF is negative because the pectoral insertion lies below the body midline.
 .fm_defaults <- function() list(
   f_Bd = 0.47, o_Bd = 0.50, f_Hd = 0.10, o_Hd = 0.43,
   f_eye = 0.10, o_eye = 0.82, f_PF = 0.25, o_PF = -0.69,
@@ -176,14 +177,14 @@
   f_CF = 1.15, o_CF = 0.47
 )
 
-# --- indexation robuste des photos ------------------------------------------
-# associe un nom normalise d'espece -> chemin de fichier
+# --- robust indexing of the photographs --------------------------------------
+# maps a normalised species name -> file path
 .fm_photo_index <- function(photo_dir) {
   files <- list.files(photo_dir, pattern = "\\.(jpg|jpeg|png|JPG|JPEG|PNG)$",
                       full.names = TRUE)
   norm <- function(x) {
     x <- tools::file_path_sans_ext(basename(x))
-    x <- sub("\\s*\\d+$", "", x)                       # " 1", " 2" a la fin
+    x <- sub("\\s*\\d+$", "", x)                       # a trailing " 1", " 2"
     x <- gsub("_(profile|dessin|dessous|dessus|photo)$", "", x, ignore.case = TRUE)
     x <- gsub("[^A-Za-z]+", "_", x)                    # tout separateur -> _
     tolower(gsub("^_|_$", "", x))
@@ -199,18 +200,18 @@
   tolower(gsub("^_|_$", "", x))
 }
 
-# --- point 23 (derive) ------------------------------------------------------
-# Intersection de la droite (1,9) et de la droite passant par 6 et parallele a
-# l'axe AVANT (1->22, la charniere ; corde 1->2 si 22 non defini). Le segment
-# 23-6 est donc parallele a 1->22 et mesure la distance axiale museau (1) ->
-# base de la tete (6). Repere-agnostique (pixels image OK).
+# --- point 23 (derived) ------------------------------------------------------
+# Intersection of the line (1,9) with the line through 6 parallel to the axis
+# IN FRONT (1->22, the hinge; the chord 1->2 if 22 is undefined). The segment
+# 23-6 is therefore parallel to 1->22 and measures the axial distance from the
+# snout (1) to the base of the head (6). Frame-agnostic (image pixels are fine).
 .fm_point23 <- function(P) {
   if (!all(is.finite(P[c(1L, 2L, 6L, 9L), ]))) return(c(NA_real_, NA_real_))
-  d1 <- P[9L, ] - P[1L, ]               # direction de la droite (1,9)
-  # 23-6 parallele au segment TETE (1 -> 22 ; repli 24 puis 2 si non pose)
+  d1 <- P[9L, ] - P[1L, ]               # direction of the line (1,9)
+  # 23-6 parallel to the HEAD segment (1 -> 22; falls back to 24 then 2)
   fin2 <- function(i) i <= nrow(P) && all(is.finite(P[i, ]))
   htip <- if (fin2(22L)) P[22L, ] else if (fin2(24L)) P[24L, ] else P[2L, ]
-  d2 <- htip - P[1L, ]                   # direction de l'axe TETE (1 -> 22)
+  d2 <- htip - P[1L, ]                   # direction of the HEAD axis (1 -> 22)
   cr <- d1[1] * d2[2] - d1[2] * d2[1]
   if (!is.finite(cr) || abs(cr) < 1e-9) return(c(NA_real_, NA_real_))
   w <- P[6L, ] - P[1L, ]
@@ -218,23 +219,23 @@
   as.numeric(P[1L, ] + a * d1)
 }
 
-# --- placement des 20 points depuis les segments ----------------------------
-# segments : liste nommee (valeurs des colonnes Bl,Bd,Hd,Eh2,Mo2,PFi2,PFl,Ed,
-#            Jl,CPd,CFd) ; A,B : clics museau/base caudale (px image) ;
-# params : parametres libres. Retourne matrice 22x2 (lignes = points 1..22 ;
-# seules .FM_LM_PTS sont renseignees), Y vers le bas.
+# --- placing the 20 points from the segments ---------------------------------
+# segments: named list (values of the columns Bl,Bd,Hd,Eh2,Mo2,PFi2,PFl,Ed,
+#            Jl,CPd,CFd); A,B: the snout / caudal-base clicks (image px);
+# params: the free parameters. Returns a 22x2 matrix (rows = points 1..22;
+# only .FM_LM_PTS are filled in), Y downwards.
 .fm_place <- function(segments, A, B, params = list()) {
   p  <- utils::modifyList(.fm_defaults(), params)
   gv <- function(nm) as.numeric(segments[[nm]])
   Bl <- gv("Bl")
   Blpx <- sqrt(sum((B - A)^2))
-  ppu  <- Blpx / Bl                 # pixels par unite-segment
-  u    <- (B - A) / Blpx            # axe antero-posterieur
-  up   <- c(u[2], -u[1])            # normale "dorsale" (vers le haut ecran, Y-)
+  ppu  <- Blpx / Bl                 # pixels per segment unit
+  u    <- (B - A) / Blpx            # antero-posterior axis
+  up   <- c(u[2], -u[1])            # "dorsal" normal (screen upwards, Y-)
   cm   <- function(v) v * ppu
   st   <- function(f) A + Bl * ppu * f * u
 
-  # 25 lignes : 1..23 + charnieres supplementaires 24,25 (laissees NA ici)
+  # 25 rows: 1..23 + the extra hinges 24, 25 (left NA here)
   P <- matrix(NA_real_, nrow = 25, ncol = 2, dimnames = list(NULL, c("X", "Y")))
   set <- function(i, xy) P[i, ] <<- xy
   vseg <- function(f, L, o) { s <- st(f); list(top = s + cm(L) * o * up,
@@ -243,11 +244,11 @@
   v <- vseg(p$f_Bd, gv("Bd"), p$o_Bd); set(3, v$top); set(4, v$bot)
   v <- vseg(p$f_Hd, gv("Hd"), p$o_Hd); set(5, v$top); set(6, v$bot)
   eye <- st(p$f_eye)
-  set(8, eye - cm(gv("Hd")) * p$o_eye * up)      # bas du corps sous l'oeil
-  set(7, P[8, ] + cm(gv("Eh")) * up)             # centre de l'oeil (Eh2)
+  set(8, eye - cm(gv("Hd")) * p$o_eye * up)      # body underside below the eye
+  set(7, P[8, ] + cm(gv("Eh")) * up)             # centre of the eye (Eh2)
   set(13, P[7, ] + cm(gv("Ed") / 2) * up)
   set(14, P[7, ] - cm(gv("Ed") / 2) * up)
-  set(9, P[1, ] - cm(gv("Mo")) * up)             # bas du corps sous le museau (Mo2)
+  set(9, P[1, ] - cm(gv("Mo")) * up)             # body underside below the snout (Mo2)
   v <- vseg(p$f_PF, gv("PFi"), p$o_PF); set(10, v$top); set(11, v$bot)  # PFi2
   d <- cos(-p$ang_PFl * pi / 180) * u + sin(-p$ang_PFl * pi / 180) * up
   set(12, P[10, ] + cm(gv("PFl")) * d)
@@ -255,18 +256,18 @@
   set(15, P[1, ] + cm(gv("Jl")) * d)
   v <- vseg(p$f_CP, gv("CPd"), p$o_CP); set(16, v$top); set(17, v$bot)
   v <- vseg(p$f_CF, gv("CFd"), p$o_CF); set(18, v$top); set(19, v$bot)
-  set(22, st(0.5))                               # point de courbure sur l'axe
-  set(23, .fm_point23(P))                         # derive : croisement (1,9) x (//axe par 6)
+  set(22, st(0.5))                               # curvature point on the axis
+  set(23, .fm_point23(P))                         # derived: (1,9) x (// axis through 6)
   P
 }
 
 # --- correction geometrique : conventions FISHMORPH -------------------------
-# Applique, dans le repere de l'axe du corps (1-2) -- donc valable meme si la
-# photo est inclinee -- les 5 conventions de correct_geometry_conventions() :
-#   perpendiculaires a l'axe : 9 aligne sur 1, 4 sur 3, 11 sur 10 (meme
-#     coordonnee AXIALE) ; groupe oeil {5,13,7,14,6,8} : meme coordonnee axiale
-#     (mediane) -> verticale de l'oeil ; ventre {9,8,11,4} : meme coordonnee
-#     NORMALE (mediane) -> ligne parallele a l'axe.
+# Applies, in the frame of the body axis (1-2) -- hence valid even if the
+# photograph is tilted -- the 5 conventions of correct_geometry_conventions():
+#   perpendicular to the axis: 9 aligned on 1, 4 on 3, 11 on 10 (same AXIAL
+#     coordinate); eye group {5,13,7,14,6,8}: same axial coordinate (the
+#     median) -> vertical of the eye; belly {9,8,11,4}: same NORMAL
+#     coordinate (the median) -> a line parallel to the axis.
 .fm_apply_conventions <- function(P) {
   A <- P[1, ]; B <- P[2, ]
   L <- sqrt(sum((B - A)^2)); if (!is.finite(L) || L == 0) return(P)
@@ -274,43 +275,43 @@
   fin <- function(i) all(is.finite(P[i, ]))
   ax <- vapply(1:22, function(i) if (fin(i)) sum((P[i, ] - A) * u) else NA_real_, numeric(1))
   no <- vapply(1:22, function(i) if (fin(i)) sum((P[i, ] - A) * n) else NA_real_, numeric(1))
-  # perpendiculaires (coordonnee axiale du point cale sur celle de l'ancre)
+  # perpendiculars (axial coordinate of the point set on that of the anchor)
   if (fin(1) && fin(9))  ax[9]  <- ax[1]
   if (fin(3) && fin(4))  ax[4]  <- ax[3]
   if (fin(10) && fin(11)) ax[11] <- ax[10]
-  # verticale de l'oeil : coordonnee axiale = mediane du groupe
+  # vertical of the eye: axial coordinate = median of the group
   eg <- c(5, 13, 7, 14, 6, 8); if (any(is.finite(ax[eg]))) ax[eg] <- stats::median(ax[eg], na.rm = TRUE)
-  # ligne du ventre : coordonnee normale = mediane du groupe
+  # belly line: normal coordinate = median of the group
   hg <- c(9, 8, 11, 4);        if (any(is.finite(no[hg]))) no[hg] <- stats::median(no[hg], na.rm = TRUE)
   for (i in 1:22) if (is.finite(ax[i]) && is.finite(no[i])) P[i, ] <- A + ax[i] * u + no[i] * n
-  if (nrow(P) >= 23) P[23, ] <- .fm_point23(P)   # 23 derive
+  if (nrow(P) >= 23) P[23, ] <- .fm_point23(P)   # 23 is derived
   P
 }
 
-# --- correction via les fonctions canoniques du package ----------------------
-# L'app travaille dans le repere arbitraire de la photo ; standardize_geometry()
-# et correct_geometry_conventions() exigent l'axe 1-2 horizontal. On construit
-# donc un objet landmarks (avec une barre d'echelle factice 20-21 le long de
-# l'axe), on applique
-#   standardize_geometry(orient = FALSE)  [rescale + rotation, une similitude]
-#   -> correct_geometry_conventions()     [les 5 conventions canoniques]
-# puis on inverse la similitude via les points 1-2, que les conventions ne
-# deplacent jamais, pour revenir dans le repere de la photo.
+# --- correction through the package's canonical functions --------------------
+# The app works in the arbitrary frame of the photograph; standardize_geometry()
+# and correct_geometry_conventions() require the axis 1-2 to be horizontal. We
+# therefore build a landmarks object (with a dummy scale bar 20-21 along the
+# axis) and apply
+#   standardize_geometry(orient = FALSE)  [rescale + rotation, a similarity]
+#   -> correct_geometry_conventions()     [the 5 canonical conventions]
+# then invert the similarity through points 1-2, which the conventions never
+# move, to come back into the frame of the photograph.
 #
-# Equivalent a .fm_apply_conventions() a la precision machine. Cette version est
-# conservee comme REFERENCE : si les deux divergent un jour, c'est celle-ci qui
-# fait foi, puisqu'elle passe par le code canonique du package plutot que par la
-# reimplementation locale utilisee en edition interactive (plus rapide).
+# Equivalent to .fm_apply_conventions() to machine precision. This version is
+# kept as the REFERENCE: should the two ever diverge, it is this one that
+# prevails, since it goes through the package's canonical code rather than the
+# local reimplementation used for interactive editing (which is faster).
 #
-# NOTE : depuis Rfishmorph 0.2.0 ces fonctions sont dans CE package. L'appel
-# passait auparavant par intraitR::, ce qui creait une dependance externe pour du
-# code deja porte ici.
+# NOTE: since Rfishmorph 0.2.0 these functions live in THIS package. The call
+# used to go through intraitR::, which created an external dependency for code
+# already ported here.
 .fm_correct_via_package <- function(P) {
   ax <- P[2, ] - P[1, ]; axlen <- sqrt(sum(ax^2))
   if (!is.finite(axlen) || axlen == 0) return(P)
   R <- P[1:22, , drop = FALSE]
-  R[20, ] <- P[1, ]                       # barre d'echelle factice : origine
-  R[21, ] <- P[1, ] + ax / axlen * axlen  # ... et extremite le long de l'axe (long. ~ Bl)
+  R[20, ] <- P[1, ]                       # dummy scale bar: origin
+  R[21, ] <- P[1, ] + ax / axlen * axlen  # ... and end along the axis (length ~ Bl)
   arr <- array(NA_real_, c(22, 2, 1), dimnames = list(NULL, c("X", "Y"), "sp"))
   arr[, , 1] <- R
   fish <- structure(list(coords = arr, scale = NULL,
@@ -329,86 +330,119 @@
   Pout <- P
   for (i in .FM_LM_PTS) if (i <= nrow(C) && all(is.finite(C[i, ])))
     Pout[i, ] <- P[1, ] + s * as.numeric(Rot %*% (C[i, ] - C[1, ]))
-  Pout[23, ] <- .fm_point23(Pout)   # 23 recalcule (n'existe pas dans le repere du package)
+  Pout[23, ] <- .fm_point23(Pout)   # 23 recomputed (it does not exist in the package frame)
   Pout
 }
 
-# --- conventions EN EDITION CONTRAINTE --------------------------------------
-# Conventions perpendiculaire/parallele appliquees en direct, chacune pilotee par
-# un point editable (le dernier deplace du groupe, ou un pilote par defaut), de
-# sorte qu'on peut bouger les points tout en gardant les regles.
+# --- conventions under CONSTRAINED EDITING -----------------------------------
+# Perpendicular/parallel conventions applied live, each driven by an editable
+# point (the last one moved in the group, or a default driver), so that points
+# can be moved while the rules still hold.
 #
-# AXE BRISE a 3 segments a ancres FIXES (charnieres 22 et 24 ; 25 = courbure Bl
-# seule, sans convention) :
-#   TETE    = segment 1 -> 22   : Mo (1-9), verticale oeil/Hd {5,13,7,14,6,8}, 23-6
-#   MILIEU  = segment 22 -> 24  : Bd (3-4), pectorale PFi (10-11) et PFl (10-12)
+# BROKEN AXIS with 3 segments and FIXED anchors (hinges 22 and 24; 25 = Bl
+# curvature only, with no convention):
+#   HEAD    = segment 1 -> 22   : Mo (1-9), eye/Hd vertical {5,13,7,14,6,8}, 23-6
+#   MIDDLE  = segment 22 -> 24 : Bd (3-4), pectoral PFi (10-11) and PFl (10-12)
 #   CAUDALE = segment 24 -> 2   : pedoncule (16-17), nageoire caudale (18-19)
-# Si une charniere n'est pas posee, repli gracieux vers la corde 1->2 (poisson
+# If a hinge is not placed, graceful fallback to the chord 1->2 (a straight
 # droit / correction) : comportement retro-compatible.
-# --- CONVENTION DES EXTREMES (3 = dos, 4 = ventre) ---------------------------
-# FISHMORPH definit Bd comme la profondeur MAXIMALE du corps : 3 doit donc etre
-# le point le plus DORSAL et 4 le point le plus VENTRAL du contour du corps. Un
-# 5 (haut de tete) au-dessus du 3, ou un 11 (ventre a la pectorale) sous le 4,
-# est une erreur de saisie qui sous-estime Bd.
+# --- THE EXTREME-POINT CONVENTION (3 = back, 4 = belly) ----------------------
+# FISHMORPH defines Bd as the MAXIMUM body depth: 3 must therefore be the most
+# DORSAL point and 4 the most VENTRAL point of the body outline. A 5 (top of
+# the head) above 3, or an 11 (belly at the pectoral fin) below 4, is an entry
+# error that under-estimates Bd.
 #
-# Points EXCLUS de la comparaison :
-#   8, 9, 11 : points ventraux DERIVES. Ils sont calcules DEPUIS le 4 (ligne du
-#           ventre) : tester si 4 est le point le plus bas contre eux est
-#           circulaire. Mesure faite sur les 1036 specimens T-26 digitalises :
-#           en les incluant, 20,6 % du lot est signale, dont 198 des 213 alertes
-#           portent sur 8, 9 ou 11, avec un depassement median de 0,5 % de Bl --
-#           du bruit de ligne de ventre, pas une erreur de Bd. En les excluant,
-#           1,5 % est signale (16 specimens), dont 12 fois le cas 5-au-dessus-de-3,
-#           avec un depassement median de 7,8 % de Bl. Le taux est alors STABLE
-#           de 0,003 a 0,02 Bl : ce qui reste est une erreur grossiere, nettement
-#           separee du bruit, et non un artefact de seuil ;
-#   16-19 : pedoncule et nageoire caudale -- hors du contour du corps par
-#           definition (demande explicite), la caudale depassant souvent Bd ;
-#   12, 15 : extremites de la pectorale et de la machoire -- appendices, qui
-#           depassent legitimement le contour ;
-#   20, 21 : barre d'echelle ; 23 : point derive ; 24, 25 : charnieres de saisie.
-# Restent compares a 3/4 : 1, 2, 5, 6, 7, 10, 13, 14, 22 -- les landmarks qui
-# sont des MESURES independantes du contour du corps.
+# Points EXCLUDED from the comparison:
+#   8, 9, 11 : DERIVED ventral points. They are computed FROM 4 (the belly
+#           line): testing whether 4 is the lowest point against them is
+#           circular. Measured on the 1,036 digitized T-26 specimens: including
+#           them flags 20.6 % of the batch, 198 of the 213 alerts bearing on
+#           8, 9 or 11, with a median overshoot of 0.5 % of Bl -- belly-line
+#           noise, not a Bd error. Excluding them, 1.5 % is flagged (16
+#           specimens), 12 of which are the 5-above-3 case, with a median
+#           overshoot of 7.8 % of Bl. The rate is then STABLE from 0.003 to
+#           0.02 Bl: what remains is gross error, cleanly separated from the
+#           noise, and not an artefact of the threshold;
+#   16-19 : caudal peduncle and caudal fin -- outside the body outline by
+#           definition (an explicit requirement), the caudal fin often
+#           exceeding Bd;
+#   12, 15 : tips of the pectoral fin and of the jaw -- appendages, which
+#           legitimately exceed the outline;
+#   20, 21 : scale bar; 23: derived point; 24, 25: entry hinges.
+# Still compared with 3/4: 1, 2, 5, 6, 7, 10, 13, 14, 22 -- the landmarks that
+# are MEASUREMENTS independent of the body outline.
 .FM_EXTREME_EXCLUDE <- c(8L, 9L, 11L, 12L, 15L, 16L, 17L, 18L, 19L,
                          20L, 21L, 23L, 24L, 25L)
 
-# tolerance par defaut, en FRACTION de la corde 1-2 : 0.3 % de Bl (soit ~6 px
-# pour un poisson de 2000 px). En deca, l'ecart releve du bruit de clic.
+# Default tolerance, as a FRACTION of the chord 1-2: 0.3 % of Bl (about 6 px
+# for a fish of 2,000 px). Below that, the discrepancy is click noise.
 .FM_EXTREME_TOL <- 0.003
-# PLANCHER absolu, en pixels. Sur une petite image la tolerance relative tombe
-# sous le bruit de clic (0.003 * 600 px = 1.8 px) et un depassement de 2 px
-# suffirait a declencher l'alerte -- c'est du bruit, pas une erreur. Fixe a 5 px
-# sur les donnees T-26 : les specimens conformes plafonnent a -0.4 px de
-# depassement (p98) et le plus petit ecart REEL vaut 11.8 px. Entre 1 et 8 px de
-# plancher, le nombre de specimens signales ne bouge pas (16) : la bande est
-# vide, 5 px tombe au milieu et ne coute donc aucune detection.
+
+# Absolute FLOOR, in pixels. On a small image the relative tolerance falls
+# below click noise (0.003 * 600 px = 1.8 px) and a 2 px overshoot would be
+# enough to raise the alert -- that is noise, not an error. Set to 5 px on the
+# T-26 data: compliant specimens top out at -0.4 px of overshoot (p98) and the
+# smallest REAL discrepancy is 11.8 px. Anywhere between a 1 px and an 8 px
+# floor the number of flagged specimens is unchanged (16): the band is empty,
+# so 5 px sits in the middle of it and costs no detection.
 .FM_EXTREME_FLOOR <- 5
 
-# libelles des points, pour les messages de l'application
+# --- THE EYE VERTICAL, IN ORDER ----------------------------------------------
+# The six points 5, 13, 7, 14, 6, 8 are placed on ONE vertical by convention
+# (.fm_apply_conventions aligns their axial coordinate). That convention says
+# nothing about their ORDER along that vertical -- and the order is anatomy, not
+# a choice: top of the head, top of the eye, centre of the eye, bottom of the
+# eye, bottom of the head, body underside. Reading them from the back downwards
+# gives 5 > 13 > 7 > 14 > 6 > 8.
+#
+# The two failures this catches are invisible in the coordinate table and
+# survive every other check, because each pair stays internally consistent:
+#   * 5 no longer the most dorsal of the group -> Hd (5-6) is under-measured
+#     exactly as Bd is when 3 is not the most dorsal point;
+#   * two points swapped -- typically 13 and 14 (the eye clicked bottom-first),
+#     or 7 outside the 13-14 pair -- which leaves Ed (13-14) unchanged in
+#     LENGTH while Eh (7-8), the eye HEIGHT above the belly, silently refers to
+#     the wrong edge of the eye.
+# Point 8 is derived from the belly line, so the 6/8 pair tests a measured point
+# against a computed one: a 6 below the belly line is a genuine entry error.
+#
+# Settled on the data rather than by argument, as the Bd rule was. Over the
+# 4,151 species already digitized in the workbook (median Bl = 485 px, same
+# tolerance), the expected order holds for 99.5 % of them, and each inversion is
+# rare enough to be an error rather than noise:
+#   8 above 6  : 22 specimens (0.53 %)
+#   13 above 5 : 10 (0.24 %) -- the same 10 as "5 does not top the group"
+#   6 above 14 :  2 (0.05 %)
+#   14 above 7 :  1 (0.02 %)
+# A convention that 99.5 % of a hand-digitized corpus already satisfies is a
+# convention, not a preference; the residue is worth looking at one by one.
+.FM_EYE_ORDER <- c(5L, 13L, 7L, 14L, 6L, 8L)   # dorsal -> ventral
+
+# labels of the points, for the application's messages
 .FM_PT_LABELS <- c(
-  "1" = "museau", "2" = "base de la caudale", "3" = "dos (Bd sup.)",
-  "4" = "ventre (Bd inf.)", "5" = "haut de la tete (Hd sup.)",
-  "6" = "bas de la tete (Hd inf.)", "7" = "centre de l'oeil",
-  "8" = "ventre sous l'oeil", "9" = "ventre sous le museau",
-  "10" = "insertion de la pectorale", "11" = "ventre a la pectorale",
-  "12" = "extremite de la pectorale", "13" = "haut de l'oeil",
-  "14" = "bas de l'oeil", "15" = "extremite de la machoire",
-  "16" = "pedoncule sup.", "17" = "pedoncule inf.", "18" = "caudale sup.",
-  "19" = "caudale inf.", "20" = "echelle (debut)", "21" = "echelle (fin)",
-  "22" = "charniere du corps", "23" = "point derive 23")
+  "1" = "snout", "2" = "caudal-fin base", "3" = "back (Bd upper)",
+  "4" = "belly (Bd lower)", "5" = "top of the head (Hd upper)",
+  "6" = "bottom of the head (Hd lower)", "7" = "centre of the eye",
+  "8" = "belly below the eye", "9" = "belly below the snout",
+  "10" = "pectoral-fin insertion", "11" = "belly at the pectoral fin",
+  "12" = "pectoral-fin tip", "13" = "top of the eye",
+  "14" = "bottom of the eye", "15" = "jaw tip",
+  "16" = "peduncle upper", "17" = "peduncle lower", "18" = "caudal upper",
+  "19" = "caudal lower", "20" = "scale bar (start)", "21" = "scale bar (end)",
+  "22" = "body hinge", "23" = "derived point 23")
 .fm_pt_label <- function(i) {
   l <- unname(.FM_PT_LABELS[as.character(i)])
   ifelse(is.na(l), "", paste0(" (", l, ")"))
 }
 
-# Coordonnees dans le repere du CORPS : abscisse le long de l'axe 1-2, hauteur
-# perpendiculaire a cet axe. On raisonne sur cette hauteur et non sur le Y brut
-# de l'image, car une photo inclinee fausserait la comparaison ; quand le poisson
-# est horizontal, les deux coincident exactement (au signe pres).
+# Coordinates in the frame of the BODY: abscissa along the axis 1-2, height
+# perpendicular to that axis. We reason on that height and not on the raw image
+# Y, because a tilted photograph would distort the comparison; when the fish is
+# horizontal the two coincide exactly (up to the sign).
 #
-# `sgn` donne le cote DORSAL, deduit de la position relative de 3 et 4 et non
-# d'une convention d'image : le test est donc valable tete a gauche ou a droite,
-# photo retournee, ou case "Inverser dorsal/ventral" cochee.
+# `sgn` gives the DORSAL side, deduced from the relative position of 3 and 4 and
+# not from an image convention: the test therefore holds head left or head
+# right, photograph flipped, or the "Flip dorsal/ventral" box ticked.
 .fm_body_frame <- function(P) {
   if (nrow(P) < 4L) return(NULL)
   A <- P[1, ]; B <- P[2, ]
@@ -423,9 +457,9 @@
   list(A = A, u = u, n = n, L = L, ax = ax, no = no, sgn = sign(no[3] - no[4]))
 }
 
-# Violations de la convention des extremes. Renvoie NULL si tout est conforme,
-# sinon un data.frame : `point` (3 ou 4), `culprit` (le point qui le depasse),
-# `delta` (depassement en pixels).
+# Violations of the extreme-point convention. Returns NULL when everything is
+# compliant, otherwise a data.frame: `point` (3 or 4), `culprit` (the point
+# overshooting it), `delta` (the overshoot in pixels) and `kind` ("extreme").
 .fm_extreme_violations <- function(P, tol_frac = .FM_EXTREME_TOL) {
   g <- .fm_body_frame(P); if (is.null(g)) return(NULL)
   tol  <- max(.FM_EXTREME_FLOOR, tol_frac * g$L)
@@ -433,21 +467,76 @@
   cand <- cand[is.finite(g$no[cand])]
   if (!length(cand)) return(NULL)
   out <- list()
-  d <- g$sgn * (g$no[cand] - g$no[3])           # depassement du cote DORSAL
+  d <- g$sgn * (g$no[cand] - g$no[3])           # overshoot on the DORSAL side
   k <- which.max(d)
   if (d[k] > tol) out[[length(out) + 1L]] <-
-    data.frame(point = 3L, culprit = cand[k], delta = unname(d[k]))
-  d <- g$sgn * (g$no[4] - g$no[cand])           # depassement du cote VENTRAL
+    data.frame(point = 3L, culprit = cand[k], delta = unname(d[k]),
+               kind = "extreme", stringsAsFactors = FALSE)
+  d <- g$sgn * (g$no[4] - g$no[cand])           # overshoot on the VENTRAL side
   k <- which.max(d)
   if (d[k] > tol) out[[length(out) + 1L]] <-
-    data.frame(point = 4L, culprit = cand[k], delta = unname(d[k]))
+    data.frame(point = 4L, culprit = cand[k], delta = unname(d[k]),
+               kind = "extreme", stringsAsFactors = FALSE)
   if (!length(out)) return(NULL)
   do.call(rbind, out)
 }
 
-# Correction automatique : 3 (resp. 4) prend la HAUTEUR du point qui le depasse,
-# en conservant son abscisse le long de l'axe. La convention "3-4 perpendiculaire
-# a l'axe" est donc preservee, et seul Bd change (il augmente).
+# Violations of the order along the eye vertical (see .FM_EYE_ORDER). Two things
+# are tested, and they are not the same statement:
+#   1. point 5 is the most DORSAL of the whole group -- the Hd analogue of the
+#      3/4 rule, reported against whichever point overshoots it most;
+#   2. every CONSECUTIVE pair is in order, which catches a local swap (13/14
+#      inverted, 7 outside the eye) that (1) cannot see.
+# Returns NULL, or the same schema as .fm_extreme_violations() with
+# `kind = "order"`: `point` is the one that should sit ABOVE, `culprit` the one
+# that is found above it, `delta` the inversion in pixels.
+.fm_eye_order_violations <- function(P, tol_frac = .FM_EXTREME_TOL) {
+  g <- .fm_body_frame(P); if (is.null(g)) return(NULL)
+  tol <- max(.FM_EXTREME_FLOOR, tol_frac * g$L)
+  pts <- .FM_EYE_ORDER[.FM_EYE_ORDER <= nrow(P)]
+  h   <- g$sgn * g$no[pts]                      # height, dorsal side positive
+  ok  <- is.finite(h)
+  if (sum(ok) < 2L) return(NULL)
+  out <- list()
+
+  # 1. the top of the head must top the group
+  if (ok[1]) {
+    d <- h[-1] - h[1]                           # positive = above point 5
+    d[!is.finite(d)] <- -Inf
+    k <- which.max(d)
+    if (is.finite(d[k]) && d[k] > tol) out[[length(out) + 1L]] <-
+      data.frame(point = pts[1], culprit = pts[-1][k], delta = unname(d[k]),
+                 kind = "order", stringsAsFactors = FALSE)
+  }
+  # 2. consecutive pairs, on the points actually placed: a missing landmark
+  #    must not break the chain, it must be stepped over.
+  seq_ok <- pts[ok]; h_ok <- h[ok]
+  for (i in seq_len(length(seq_ok) - 1L)) {
+    d <- h_ok[i + 1L] - h_ok[i]                 # positive = the lower one is above
+    if (d > tol) out[[length(out) + 1L]] <-
+      data.frame(point = seq_ok[i], culprit = seq_ok[i + 1L], delta = unname(d),
+                 kind = "order", stringsAsFactors = FALSE)
+  }
+  if (!length(out)) return(NULL)
+  out <- do.call(rbind, out)
+  # the "5 tops the group" rule and the first consecutive pair can name the same
+  # inversion twice; one line per (point, culprit) is enough.
+  out[!duplicated(out[, c("point", "culprit")]), , drop = FALSE]
+}
+
+# Every convention checked on save, in one table. The order is deliberate: the
+# extremes come first, because they are the ones the automatic correction can
+# repair -- an inverted pair cannot be repaired by moving a point, only by
+# measuring it again.
+.fm_convention_violations <- function(P, tol_frac = .FM_EXTREME_TOL) {
+  v <- rbind(.fm_extreme_violations(P, tol_frac),
+             .fm_eye_order_violations(P, tol_frac))
+  if (is.null(v) || !nrow(v)) NULL else v
+}
+
+# Automatic correction: 3 (resp. 4) takes the HEIGHT of the point overshooting
+# it, keeping its abscissa along the axis. The convention "3-4 perpendicular to
+# the axis" is therefore preserved, and only Bd changes (it grows).
 .fm_fix_extremes <- function(P, viol) {
   g <- .fm_body_frame(P); if (is.null(g)) return(P)
   for (r in seq_len(nrow(viol))) {
@@ -464,7 +553,7 @@
   fin <- function(i) i <= nrow(P) && all(is.finite(P[i, ]))
 
   # repere local (origine o, axe unitaire o->tip, normale) -> ax / no / setp.
-  # setp modifie P dans l'environnement de .fm_constrain via <<-.
+  # setp modifies P in the environment of .fm_constrain, through <<-.
   frame <- function(o, tip) {
     d <- tip - o; Ld <- sqrt(sum(d^2))
     d <- if (is.finite(Ld) && Ld > 0) d / Ld else (B - A) / Lab
@@ -473,12 +562,12 @@
          no   = function(i) sum((P[i, ] - o) * nn),
          setp = function(i, a, b) P[i, ] <<- o + a * d + b * nn)
   }
-  # Trois segments d'axe a ANCRES FIXES (22 et 24 = charnieres ; 25 ne sert qu'a
-  # courber Bl, aucune convention) :
-  #   TETE    -> segment 1 -> 22   (Mo 1-9, oeil/Hd {5,13,7,14,6,8}, 23-6)
+  # Three axis segments with FIXED ANCHORS (22 and 24 = hinges; 25 only serves
+  # to curve Bl, with no convention):
+  #   HEAD    -> segment 1 -> 22   (Mo 1-9, eye/Hd {5,13,7,14,6,8}, 23-6)
   #   MILIEU  -> segment 22 -> 24  (Bd 3-4, pectorale PFi 10-11 et PFl 10-12)
   #   CAUDALE -> segment 24 -> 2   (pedoncule 16-17, nageoire caudale 18-19)
-  # Repli gracieux si une charniere n'est pas posee (poisson droit / correction) :
+  # Graceful fallback when a hinge is not placed (straight fish / correction):
   p22 <- if (fin(22)) P[22, ] else NULL
   p24 <- if (fin(24)) P[24, ] else NULL
   head_tip <- if (!is.null(p22)) p22 else if (!is.null(p24)) p24 else B
@@ -489,23 +578,23 @@
   fr_mid  <- frame(mid_org, mid_tip)  # 22 -> 24
   fr_tail <- frame(tail_org, B)       # 24 -> 2
 
-  driver <- function(grp, default) {          # point pilote VALIDE (finite) du groupe
+  driver <- function(grp, default) {          # the VALID (finite) driver of the group
     o <- overridden[overridden %in% grp]; o <- o[vapply(o, fin, logical(1))]
     if (length(o)) return(o[length(o)])
     if (fin(default)) return(default)
     pres <- grp[vapply(grp, fin, logical(1))]
     if (length(pres)) pres[1] else NA_integer_
   }
-  # segment perpendiculaire a l'axe `fr` : le pilote garde tout, l'autre garde sa
-  # hauteur (no) et recale son abscisse (ax) sur le pilote.
+  # segment perpendicular to the axis `fr`: the driver keeps everything, the
+  # other keeps its height (no) and resets its abscissa (ax) on the driver.
   perp <- function(fr, a, b, default) {
     if (!(fin(a) && fin(b))) return(invisible())
     dr <- driver(c(a, b), default); ot <- if (dr == a) b else a
     fr$setp(ot, fr$ax(dr), fr$no(ot))
   }
   # --- TETE (segment 1->22) ---
-  perp(fr_head, 1, 9, 1L)       # Mo  : museau (1) pilote, ventre (9) adapte
-  eye <- c(5, 13, 7, 14, 6, 8); de <- driver(eye, 7L)   # verticale oeil/Hd
+  perp(fr_head, 1, 9, 1L)       # Mo  : snout (1) drives, belly (9) follows
+  eye <- c(5, 13, 7, 14, 6, 8); de <- driver(eye, 7L)   # eye/Hd vertical
   if (!is.na(de)) { ae <- fr_head$ax(de)
     for (i in setdiff(eye, de)) if (fin(i)) fr_head$setp(i, ae, fr_head$no(i)) }
   if (fin(7) && fin(13) && fin(14)) {          # 13/14 symetriques, diametre Ed conserve
@@ -514,25 +603,25 @@
     fr_head$setp(14, fr_head$ax(7), fr_head$no(7) - h)
   }
   # --- MILIEU (segment 22->24) : Bd + pectorale ---
-  perp(fr_mid, 3, 4, 4L)        # Bd  : ventre (4) pilote, dos (3) adapte
-  perp(fr_mid, 10, 11, 11L)     # PFi : ventre (11) pilote, insertion (10) adapte
+  perp(fr_mid, 3, 4, 4L)        # Bd  : belly (4) drives, back (3) follows
+  perp(fr_mid, 10, 11, 11L)     # PFi : belly (11) drives, insertion (10) follows
   # --- CAUDALE (segment 24->2) ---
   perp(fr_tail, 16, 17, 16L)    # pedoncule caudal vertical
   perp(fr_tail, 18, 19, 18L)    # nageoire caudale verticale
 
-  # --- LIGNE DU VENTRE, BRISEE au point 11 ---
-  #   tete   : 9, 8, 11 alignes PARALLELE a 1->22
+  # --- BELLY LINE, BROKEN at point 11 ---
+  #   head   : 9, 8, 11 aligned PARALLEL to 1->22
   #   milieu : 4, 11    alignes PARALLELE a 22->24
-  # Pivot par defaut = 11 (jonction). On amene chaque point VENTRAL (9, 8, 4) sur
-  # sa ligne en changeant UNIQUEMENT sa hauteur (on garde son abscisse -> reste
-  # perpendiculaire a l'axe) ; le point DORSAL partenaire (1, 7, 3) NE bouge PAS.
-  # Ainsi 1-9 = bouche->bas du corps, 7-8 = oeil->bas du corps, 3-4 = profondeur.
-  # Un point deplace a la main (overridden) n'est pas bouge.
-  # 4 = point PRECIS (maitre). La chaine derive de 4 :
-  #   1) 11 se cale sur 4  -> ligne 11-4 PARALLELE a 22-24 (11 garde son abscisse)
-  #   2) 8,9 se calent sur 11 -> ligne 9-8-11 PARALLELE a 1-22
-  # L'ordre compte : on derive 11 depuis 4 AVANT de deriver 8,9 depuis 11.
-  # Chaque point garde son abscisse -> reste perpendiculaire a son axe.
+  # Default pivot = 11 (the junction). Each VENTRAL point (9, 8, 4) is brought
+  # its line by changing ONLY its height (its abscissa is kept -> it stays
+  # perpendicular to the axis); the DORSAL partner point (1, 7, 3) does NOT move.
+  # So 1-9 = mouth->body underside, 7-8 = eye->body underside, 3-4 = depth.
+  # A point moved by hand (overridden) is not moved.
+  # 4 = the PRECISE point (the master). The chain derives from 4:
+  #   1) 11 aligns on 4  -> line 11-4 PARALLEL to 22-24 (11 keeps its abscissa)
+  #   2) 8,9 align on 11 -> line 9-8-11 PARALLEL to 1-22
+  # The order matters: 11 is derived from 4 BEFORE 8,9 are derived from 11.
+  # Each point keeps its abscissa -> it stays perpendicular to its axis.
   belly_line <- function(fr, pivot, movers) {
     if (is.na(pivot) || !fin(pivot)) return(invisible())
     nb <- fr$no(pivot)
@@ -543,9 +632,9 @@
   head_piv <- if (fin(11)) 11L else if (fin(9)) 9L else NA_integer_
   belly_line(fr_head, head_piv, c(8L, 9L, 11L))    # 8,9 <- 11 (9-8-11 // 1-22)
 
-  # PFl (10->12) EN DERNIER (apres que 10 ait sa position finale) : PARALLELE a
+  # PFl (10->12) LAST (once 10 has its final position): PARALLEL to
   # 22->24 et LONGUEUR FIXE = PFl si connue (12 = 10 + PFl*u_mid). Si TU as deplace
-  # 12 a la main (overridden), il reste libre.
+  # 12 by hand (overridden), it stays free.
   if (fin(10) && fin(12) && !(12L %in% overridden)) {
     if (is.finite(pfl_px)) fr_mid$setp(12, fr_mid$ax(10) + pfl_px, fr_mid$no(10))
     else                   fr_mid$setp(12, fr_mid$ax(12), fr_mid$no(10))
@@ -556,80 +645,94 @@
 # =============================================================================
 # Application
 # =============================================================================
-#' Outil interactif de digitalisation des landmarks FISHMORPH
+#' Interactive tool for digitizing the FISHMORPH landmarks
 #'
-#' Ouvre une application 'shiny' qui place les 21 landmarks FISHMORPH sur des
-#' photographies de specimens, selon trois files de travail commutables a la
-#' volee (voir `mode`). Chaque enregistrement part d'abord dans un journal
-#' append-only ([fm_journal_open()]), puis dans le classeur ; en cas d'arret
-#' brutal, [fishmorph_consolidate()] retrouve tout le travail.
+#' Opens a 'shiny' application that places the 21 FISHMORPH landmarks on
+#' specimen photographs, along three working queues that can be switched on the
+#' fly (see `mode`). Every record goes first to an append-only journal
+#' ([fm_journal_open()]), then to the workbook; after a brutal interruption,
+#' [fishmorph_consolidate()] recovers all the work.
 #'
-#' Les photographies restent EN LOCAL : elles ne sont jamais copiees dans le
-#' package ni dans le classeur, seuls leur nom de fichier et leurs dimensions en
-#' pixels sont enregistres. C'est `photo_dir` et `new_photo_dir` qui font le lien.
+#' The photographs stay LOCAL: they are never copied into the package nor into
+#' the workbook, only their file name and their size in pixels are recorded. It
+#' is `photo_dir` and `new_photo_dir` that make the link.
 #'
-#' @section Controle des extremes a l'enregistrement:
-#' FISHMORPH definit `Bd` comme la profondeur MAXIMALE du corps : le point 3 doit
-#' donc etre le plus dorsal et le point 4 le plus ventral. Quand la case
-#' *"Verifier 3/4 (extremes)"* est cochee (defaut), "Enregistrer & suivant"
-#' controle cette convention avant toute ecriture et, si elle est violee, propose
-#' de **remesurer** (le point fautif devient actif et la vue s'y centre), de
-#' **corriger automatiquement** (3, resp. 4, prend la hauteur du point qui le
-#' depasse, en gardant sa position le long de l'axe : `Bd` augmente, la
-#' perpendicularite 3-4 est preservee) ou d'**enregistrer sans corriger**.
+#' @section Extreme-point check on save:
+#' FISHMORPH defines `Bd` as the MAXIMUM body depth: point 3 must therefore be
+#' the most dorsal and point 4 the most ventral. When the box
+#' *"Check 3/4 (extremes)"* is ticked (the default), "Save & next"
+#' checks that convention before anything is written and, if it is breached,
+#' offers to **measure again** (the offending point becomes active and the view
+#' centres on it), to **correct automatically** (3, resp. 4, takes the height of
+#' the point overshooting it, keeping its position along the axis: `Bd` grows,
+#' the 3-4 perpendicularity is preserved) or to **save without correcting**.
 #'
-#' Les hauteurs sont mesurees perpendiculairement a l'axe du corps 1-2 -- une
-#' photo inclinee ne fausse donc pas le test -- et le cote dorsal est deduit de
-#' la position relative de 3 et 4, ce qui rend le controle valable quelle que
-#' soit l'orientation (tete a gauche ou a droite, photo retournee, case
-#' "Inverser dorsal/ventral" cochee). Sont EXCLUS de la comparaison le pedoncule
-#' et la nageoire caudale (16-19), qui depassent le corps par definition, ainsi
-#' que les extremites d'appendices (12 pectorale, 15 machoire) et les points
-#' ventraux DERIVES (8, 9, 11), calcules depuis le 4 lui-meme -- les inclure
-#' signalerait 20,6 pour cent des specimens T-26 pour du bruit de ligne de
-#' ventre, contre 1,5 pour cent d'erreurs franches une fois exclus ; la barre
-#' d'echelle (20, 21), le point derive (23) et les charnieres (24, 25) ne sont
-#' pas des points de contour. La tolerance vaut 0,003 fois la longueur du corps
-#' (soit 3 pixels pour un poisson de 1000 pixels), en deca de quoi l'ecart releve
-#' du bruit de clic.
-#' Les points recales portent le statut `"adjusted"` dans le journal, distinct de
-#' `"placed"` : la correction automatique reste tracable specimen par specimen.
+#' Heights are measured perpendicular to the body axis 1-2 -- a tilted
+#' photograph therefore does not distort the test -- and the dorsal side is
+#' deduced from the relative position of 3 and 4, which makes the check valid
+#' whatever the orientation (head left or right, photograph flipped, the
+#' "Flip dorsal/ventral" box ticked). EXCLUDED from the comparison are the
+#' caudal peduncle and fin (16-19), which exceed the body by definition, the
+#' appendage tips (12 pectoral, 15 jaw) and the DERIVED ventral points
+#' (8, 9, 11), computed from 4 itself -- including them would flag 20.6 per
+#' cent of the T-26 specimens for belly-line noise, against 1.5 per cent of
+#' outright errors once they are excluded; the scale bar (20, 21), the derived
+#' point (23) and the hinges (24, 25) are not outline points. The tolerance is
+#' 0.003 times the body length (that is 3 pixels for a fish of 1,000 pixels),
+#' below which the discrepancy is click noise.
 #'
-#' @param xlsx_path Chemin du classeur maitre (2 feuilles).
-#' @param photo_dir Dossier des photos (reste en local).
-#' @param out_path  Chemin de la copie de sortie. NULL -> "<maitre>_reconstructed.xlsx"
-#'   dans le meme dossier. La copie est creee si absente ; sinon la reprise se
-#'   fait dessus (les especes deja enregistrees sont exclues de la file).
-#' @param seg_sheet,lm_sheet Noms des feuilles.
-#' @param new_sheet Feuille ou sont ajoutes les NOUVEAUX specimens (mode "new").
-#'   Creee (avec les entetes de `lm_sheet`) si elle n'existe pas.
-#' @param new_photo_dir Dossier des photos de nouveaux specimens (mode "new").
-#'   Toutes les images du dossier forment la file. Peut ne pas exister : le mode
-#'   "new" est alors simplement indisponible.
-#' @param ruler_mm Longueur reelle (mm) de la barre d'echelle digitalisee par les
-#'   points 20 et 21 en mode "new". Modifiable dans l'app, specimen par specimen.
-#' @param journal_dir Dossier du JOURNAL append-only (voir [fm_journal_open()]).
-#'   Chaque enregistrement y est ajoute AVANT toute ecriture du classeur : c'est
-#'   la source de verite, et elle survit a un crash.
-#'   [fishmorph_consolidate()] reconstruit la base a tout moment.
-#' @param operator Identifiant de l'operateur, trace dans le journal et dans le
-#'   nom du fichier de session. NULL -> utilisateur systeme.
-#' @param xlsx_flush_every Nombre d'enregistrements entre deux ecritures du
-#'   classeur. Le classeur pese plusieurs Mo et est REECRIT INTEGRALEMENT a chaque
-#'   fois : le sortir de la boucle de saisie evite autant le risque que l'attente.
-#'   Les modifications non ecrites restent en memoire (donc relisibles dans la
-#'   session), sont ecrites en fin de session, par le bouton dedie, et sont de
-#'   toute facon dans le journal. 1 = comportement historique (a chaque specimen).
-#' @param mode File de depart : "reconstruct" (especes SANS landmarks, a
-#'   digitaliser depuis les segments), "correct" (especes DEJA landmarkees, a
-#'   relire/corriger : les 21 points sont recharges du classeur) ou "new"
-#'   (photos nouvelles de `new_photo_dir`, ajoutees a `new_sheet`). Commutable a
-#'   tout moment via le bouton "Mode" dans l'app. Si la file demandee est vide,
-#'   l'app demarre sur une autre.
-#' @return Invisiblement `NULL` ; appelee pour son effet de bord (lance l'app).
-#' @seealso [fishmorph_consolidate()] pour relire le journal,
-#'   [fishmorph_build_db()] pour en construire la base,
-#'   [launch_fishmorph_space()] pour explorer l'espace morphologique.
+#' Points that were snapped carry the status `"adjusted"` in the journal,
+#' distinct from `"placed"`: the automatic correction stays traceable specimen
+#' by specimen.
+#'
+#' The same box also checks the ORDER of the eye vertical. The six points 5, 13,
+#' 7, 14, 6, 8 are placed on one vertical by the FISHMORPH conventions, and
+#' anatomy fixes their order along it, from the back downwards: top of the head,
+#' top of the eye, centre of the eye, bottom of the eye, bottom of the head,
+#' body underside. Two failures follow from that and from nothing else -- 5 no
+#' longer topping the group, which under-measures `Hd` exactly as a misplaced 3
+#' under-measures `Bd`; and a local swap, typically 13 and 14 when the eye is
+#' clicked bottom-first, or 7 outside the 13-14 pair. Neither is visible in a
+#' coordinate table: each pair stays internally consistent, `Ed` (13-14) keeps
+#' its length, while `Eh` (7-8) silently refers to the wrong edge of the eye.
+#' An inversion is reported but **never corrected automatically**: moving a
+#' point to satisfy the order would invent a measurement rather than repair one.
+#'
+#' @param xlsx_path Path of the master workbook (2 sheets).
+#' @param photo_dir Photograph folder (stays local).
+#' @param out_path  Path of the output copy. NULL -> "<master>_reconstructed.xlsx"
+#'   in the same folder. The copy is created if absent; otherwise work resumes
+#'   on it (species already recorded are excluded from the queue).
+#' @param seg_sheet,lm_sheet Sheet names.
+#' @param new_sheet Sheet the NEW specimens are appended to ("new" mode).
+#'   Created (with the headers of `lm_sheet`) if it does not exist.
+#' @param new_photo_dir Folder of the new specimens' photographs ("new" mode).
+#'   Every image in the folder forms the queue. It may not exist: the "new"
+#'   mode is then simply unavailable.
+#' @param ruler_mm Real length (mm) of the scale bar digitized by points 20 and
+#'   21 in "new" mode. Can be changed in the app, specimen by specimen.
+#' @param journal_dir Folder of the append-only JOURNAL (see [fm_journal_open()]).
+#'   Every record is appended to it BEFORE any workbook write: it is the source
+#'   of truth, and it survives a crash.
+#'   [fishmorph_consolidate()] rebuilds the database at any time.
+#' @param operator Operator identifier, traced in the journal and in the session
+#'   file name. NULL -> the system user.
+#' @param xlsx_flush_every Number of records between two writes of the
+#'   workbook. The workbook weighs several Mb and is REWRITTEN IN FULL every
+#'   time: taking it out of the digitizing loop removes both the risk and the
+#'   wait. Unwritten changes stay in memory (and are therefore readable within
+#'   the session), are written at the end of the session, by the dedicated
+#'   button, and are in the journal in any case. 1 = the historical behaviour
+#' @param mode Starting queue: "reconstruct" (species WITHOUT landmarks, to be
+#'   digitized from the segments), "correct" (species ALREADY landmarked, to be
+#'   reviewed/corrected: the 21 points are reloaded from the workbook) or
+#'   "new" (new photographs from `new_photo_dir`, appended to `new_sheet`).
+#'   Switchable at any moment through the "Queue" selector in the app. If the
+#'   requested queue is empty, the app starts on another one.
+#' @return Invisibly `NULL`; called for its side effect (it launches the app).
+#' @seealso [fishmorph_consolidate()] to read the journal back,
+#'   [fishmorph_build_db()] to build the database from it,
+#'   [launch_fishmorph_space()] to explore the morphological space.
 #' @examples
 #' \dontrun{
 #' launch_fishmorph_digitizer(
@@ -656,17 +759,17 @@ launch_fishmorph_digitizer <- function(
 
   mode <- match.arg(mode)
   if (!exists("fm_journal_open", mode = "function"))
-    stop("fishmorph_landmark_store.R n'est pas charge : source() ce fichier ",
-         "d'abord (il porte le journal de securite et la consolidation).",
+    stop("fishmorph_landmark_store.R is not loaded: source() that file first ",
+         "(it carries the safety journal and the consolidation).",
          call. = FALSE)
   xlsx_flush_every <- max(1L, as.integer(xlsx_flush_every))
   for (pkg in c("shiny", "openxlsx")) if (!requireNamespace(pkg, quietly = TRUE))
-    stop("Le package '", pkg, "' est requis.", call. = FALSE)
+    stop("Package '", pkg, "' is required.", call. = FALSE)
   if (!file.exists(xlsx_path)) stop("Classeur introuvable : ", xlsx_path, call. = FALSE)
-  if (!dir.exists(photo_dir)) stop("Dossier photos introuvable : ", photo_dir, call. = FALSE)
+  if (!dir.exists(photo_dir)) stop("Photograph folder not found: ", photo_dir, call. = FALSE)
   if (is.null(out_path)) {
-    # si on ouvre deja le fichier "_reconstructed", on reecrit DEDANS (pas de
-    # nouvelle copie a chaque lancement) ; sinon on cree/complete la copie.
+    # if the "_reconstructed" file is the one being opened, we rewrite INSIDE
+    # it (no new copy at every launch); otherwise the copy is created/completed.
     out_path <- if (grepl("_reconstructed\\.xlsx$", xlsx_path)) xlsx_path
                 else sub("\\.xlsx$", "_reconstructed.xlsx", xlsx_path)
   }
@@ -674,22 +777,22 @@ launch_fishmorph_digitizer <- function(
 
   shiny <- asNamespace("shiny")
 
-  # --- lecture des deux feuilles depuis la COPIE (reprise possible) ----------
-  # on lit les entetes bruts separement : read.xlsx peut renommer les colonnes
-  # commencant par un chiffre ("1_X" -> "X1_X"), ce qui casserait l'ecriture.
+  # --- reading the two sheets from the COPY (so work can be resumed) ---------
+  # the raw headers are read separately: read.xlsx may rename the columns that
+  # start with a digit ("1_X" -> "X1_X"), which would break the writing.
   read_sheet <- function(sheet) {
     hdr <- as.character(openxlsx::read.xlsx(out_path, sheet = sheet,
                                             colNames = FALSE, rows = 1))
-    # on ne coupe QUE les entetes vides de FIN : supprimer un vide interieur
-    # decalerait `cols = seq_along(hdr)` et desalignerait les noms de colonnes.
+    # ONLY the trailing empty headers are cut: removing an inner empty one would
+    # shift `cols = seq_along(hdr)` and misalign the column names.
     ok <- !is.na(hdr) & nzchar(hdr)
     if (any(ok)) hdr <- hdr[seq_len(max(which(ok)))] else hdr <- character(0)
-    # forcer la plage complete de colonnes : sinon read.xlsx supprime les
-    # colonnes de fin entierement vides (ex. 22_X / 22_Y rarement digitalises),
-    # ce qui desaligne les noms.
+    # the full column range is forced: otherwise read.xlsx drops the entirely
+    # empty trailing columns (e.g. 22_X / 22_Y, rarely digitized), which
+    # misaligns the names.
     df <- openxlsx::read.xlsx(out_path, sheet = sheet, colNames = FALSE,
                               startRow = 2, cols = seq_along(hdr))
-    if (is.null(df) || !nrow(df))                    # feuille vide (entetes seuls)
+    if (is.null(df) || !nrow(df))                    # empty sheet (headers only)
       df <- as.data.frame(matrix(NA, nrow = 0, ncol = length(hdr)))
     else if (ncol(df) < length(hdr))                 # securite : re-padding
       df[, (ncol(df) + 1):length(hdr)] <- NA
@@ -698,41 +801,41 @@ launch_fishmorph_digitizer <- function(
   }
   s1 <- read_sheet(seg_sheet); seg_df <- s1$df
   s2 <- read_sheet(lm_sheet);  lm_df  <- s2$df; lm_hdr <- s2$hdr
-  col_of <- function(nm) match(nm, lm_hdr)   # utilise lm_hdr a jour (maj possible)
-  wb <- openxlsx::loadWorkbook(out_path)   # charge une fois, ecrit en memoire
+  col_of <- function(nm) match(nm, lm_hdr)   # uses the up-to-date lm_hdr
+  wb <- openxlsx::loadWorkbook(out_path)   # loaded once, written in memory
 
-  # ajoute a une feuille les colonnes manquantes (entete ecrit a la suite), et
-  # les cree aussi dans le data.frame en memoire. Retourne l'entete a jour.
+  # adds the missing columns to a sheet (header written at the end), and creates
+  # them in the in-memory data.frame too. Returns the updated header.
   ensure_cols <- function(sheet, hdr, need) {
     miss <- need[!need %in% hdr]
     if (!length(miss)) return(hdr)
     for (j in seq_along(miss))
       openxlsx::writeData(wb, sheet, miss[j], startCol = length(hdr) + j,
                           startRow = 1, colNames = FALSE)
-    fm_save_workbook_atomic(wb, out_path)                    # persiste les entetes
+    fm_save_workbook_atomic(wb, out_path)                    # persist the headers
     message("Colonnes ajoutees a '", sheet, "' : ", paste(miss, collapse = ", "))
     c(hdr, miss)
   }
 
-  # colonnes des charnieres supplementaires 24/25 : creees si absentes, pour que
-  # ces points soient ENREGISTRES comme les autres (22/23 ont deja leurs colonnes).
+  # columns of the extra hinges 24/25: created if absent, so that these points
+  # are RECORDED like the others (22/23 already have their columns).
   hinge_cols <- c("24_X", "24_Y", "25_X", "25_Y")
   new_lm_hdr <- ensure_cols(lm_sheet, lm_hdr, hinge_cols)
-  # rep(...) et non NA seul : sur une feuille vide (0 ligne) df[[cc]] <- NA echoue
+  # rep(...) and not a bare NA: on an empty sheet (0 rows) df[[cc]] <- NA fails
   for (cc in setdiff(new_lm_hdr, lm_hdr)) lm_df[[cc]] <- rep(NA_real_, nrow(lm_df))
-  lm_hdr <- new_lm_hdr                             # entete a jour -> col_of les trouve
-  # points enregistres/recharges : landmarks + charnieres 22/23/24/25
+  lm_hdr <- new_lm_hdr                             # updated header -> col_of finds them
+  # points recorded / reloaded: the landmarks + the hinges 22/23/24/25
   save_pts <- c(.FM_LM_PTS, 24L, 25L)
 
-  # --- feuille des NOUVEAUX specimens (mode "new") ---------------------------
-  # Creee avec les entetes de lm_sheet si absente. On y garantit ensuite les
-  # colonnes dont l'app a besoin : les 21 landmarks (deja presents si "memes
-  # champs"), les charnieres 24/25, la barre d'echelle 20/21, et trois colonnes
-  # de tracabilite : photo_file (CLE de la ligne), ruler_mm, mm_per_px.
+  # --- sheet of the NEW specimens ("new" mode) -------------------------------
+  # Created with the headers of lm_sheet if absent. The columns the app needs
+  # are then guaranteed: the 21 landmarks (already there if the fields match),
+  # the hinges 24/25, the scale bar 20/21, and three traceability columns:
+  # photo_file (the row KEY), ruler_mm, mm_per_px.
   new_exists <- new_sheet %in% openxlsx::getSheetNames(out_path)
   if (!new_exists) openxlsx::addWorksheet(wb, new_sheet)
-  # feuille absente OU presente mais sans ligne d'entete : on y ecrit celle de
-  # lm_sheet. Une feuille existante avec ses entetes est laissee telle quelle.
+  # sheet absent OR present but without a header row: the header of lm_sheet is
+  # written into it. An existing sheet with its headers is left alone.
   hdr0 <- if (new_exists) {
     h <- suppressWarnings(as.character(openxlsx::read.xlsx(
       out_path, sheet = new_sheet, colNames = FALSE, rows = 1)))
@@ -740,7 +843,7 @@ launch_fishmorph_digitizer <- function(
   } else character(0)
   if (!length(hdr0)) {
     openxlsx::writeData(wb, new_sheet, t(as.matrix(lm_hdr)), colNames = FALSE)
-    message("Entetes ecrits dans '", new_sheet, "' (copie de '", lm_sheet, "').")
+    message("Headers written into '", new_sheet, "' (a copy of '", lm_sheet, "').")
   }
   if (!new_exists || !length(hdr0)) fm_save_workbook_atomic(wb, out_path)
   ns <- read_sheet(new_sheet)
@@ -754,12 +857,12 @@ launch_fishmorph_digitizer <- function(
   for (cc in setdiff(new_hdr2, new_hdr)) new_df[[cc]] <- rep(NA, nrow(new_df))
   new_hdr <- new_hdr2
   col_of_new <- function(nm) match(nm, new_hdr)
-  # tout en caractere : new_df ne sert qu'a retrouver la ligne d'une photo et a
-  # compter les lignes ; les valeurs reelles sont ecrites par writeData. Evite les
-  # erreurs d'affectation (chaine dans une colonne logique d'une feuille vide).
+  # everything as character: new_df only serves to find the row of a photograph
+  # and to count the rows; the real values are written by writeData. Avoids
+  # assignment errors (a string into a logical column of an empty sheet).
   if (ncol(new_df)) new_df[] <- lapply(new_df, as.character)
 
-  # index photos + cles espece
+  # photograph index + species keys
   photos <- .fm_photo_index(photo_dir)
   seg_df$.key <- .fm_species_key(seg_df$Genus.species)
   lm_df$.key  <- .fm_species_key(lm_df$Genus.species)
@@ -775,19 +878,19 @@ launch_fishmorph_digitizer <- function(
   seg_by_key <- seg_by_key[!duplicated(seg_by_key$.key), ]
   rownames(seg_by_key) <- seg_by_key$.key
 
-  # DEUX files, choisies au lancement (arg `mode`) et commutables par le bouton
-  # "Mode" dans l'app :
-  #   * reconstruct : especes SANS landmarks, AVEC segments et photo (a digitaliser)
-  #   * correct     : especes DEJA landmarkees, AVEC photo (a relire / corriger ;
-  #                   les 21 points sont recharges depuis le classeur, PAS
-  #                   reconstruits depuis les segments)
+  # TWO queues, chosen at launch (the `mode` argument) and switchable with the
+  # "Queue" selector in the app:
+  #   * reconstruct : species WITHOUT landmarks, WITH segments and a photograph
+  #   * correct     : species ALREADY landmarked, WITH a photograph (to review /
+  #                   correct; the 21 points are reloaded from the workbook, NOT
+  #                   reconstructed from the segments)
   q_recon <- which(lm_missing &
                      lm_df$.key %in% rownames(seg_by_key) & has_photo)
   q_corr  <- which(!lm_missing & has_photo & !is.na(lm_df$.key))
 
-  # file "new" : toutes les images du dossier des nouvelles photos. Une entree =
-  # UNE photo (et non une espece) : plusieurs specimens d'une meme espece sont
-  # donc possibles, chacun sur sa propre ligne de `new_sheet`.
+  # the "new" queue: every image in the new-photographs folder. One entry = ONE
+  # photograph (and not one species): several specimens of the same species are
+  # therefore possible, each on its own row of `new_sheet`.
   new_photos <- if (dir.exists(new_photo_dir))
     sort(list.files(new_photo_dir, full.names = TRUE,
                     pattern = "\\.(jpe?g|png|gif|bmp|tiff?)$", ignore.case = TRUE))
@@ -795,9 +898,9 @@ launch_fishmorph_digitizer <- function(
   q_new <- seq_along(new_photos)
 
   if (!length(q_recon) && !length(q_corr) && !length(q_new))
-    stop("Aucune espece exploitable (ni a reconstruire, ni a corriger avec photo, ",
-         "ni nouvelle photo dans '", new_photo_dir, "').", call. = FALSE)
-  # si la file demandee est vide, on bascule sur la premiere file non vide
+    stop("No usable species (none to reconstruct, none to correct with a photograph, ",
+         "no new photograph in '", new_photo_dir, "').", call. = FALSE)
+  # if the requested queue is empty, we fall back to the first non-empty one
   qlen_of <- function(m) switch(m, reconstruct = length(q_recon),
                                 correct = length(q_corr), new = length(q_new), 0L)
   if (!qlen_of(mode)) {
@@ -805,37 +908,37 @@ launch_fishmorph_digitizer <- function(
     alt <- alt[vapply(alt, function(m) qlen_of(m) > 0, logical(1))][1]
     message("File '", mode, "' vide -> demarrage en mode '", alt, "'."); mode <- alt
   }
-  message(sprintf("Files : %d espece(s) a reconstruire, %d a corriger, %d nouvelle(s) photo(s).",
+  message(sprintf("Queues: %d species to reconstruct, %d to correct, %d new photograph(s).",
                   length(q_recon), length(q_corr), length(q_new)))
 
-  # --- journal append-only : la source de verite -----------------------------
-  # Ouvert AVANT toute saisie. Chaque enregistrement y est ajoute en premier ; le
-  # classeur n'est plus qu'un export, ecrit atomiquement et par lots.
+  # --- append-only journal: the source of truth ------------------------------
+  # Opened BEFORE any entry. Every record goes there first; the workbook is now
+  # only an export, written atomically and in batches.
   jr <- fm_journal_open(journal_dir, operator = operator,
                         app_version = .fm_app_version())
-  pending <- 0L                          # enregistrements non ecrits dans le xlsx
-  # ecrit le classeur si assez d'enregistrements se sont accumules (ou si force).
-  # En cas d'echec on N'ECRASE RIEN et on previent : le journal, lui, est deja
-  # ecrit, donc aucune donnee n'est perdue -- fishmorph_consolidate() la retrouve.
+  pending <- 0L                          # records not yet written to the xlsx
+  # writes the workbook once enough records have accumulated (or when forced).
+  # On failure NOTHING is overwritten and the operator is told: the journal is
+  # already written, so no data is lost -- fishmorph_consolidate() finds it.
   flush_xlsx <- function(force = FALSE) {
     if (pending == 0L) return(invisible(FALSE))
     if (!force && pending < xlsx_flush_every) return(invisible(FALSE))
     ok <- tryCatch({ fm_save_workbook_atomic(wb, out_path); TRUE },
-                   error = function(e) { warning("Ecriture du classeur echouee : ",
-                     conditionMessage(e), " -- les donnees restent dans le journal ",
+                   error = function(e) { warning("Writing the workbook failed: ",
+                     conditionMessage(e), " -- the data stays in the journal ",
                      "(", jr$path, ").", call. = FALSE); FALSE })
     if (ok) pending <<- 0L
     invisible(ok)
   }
 
-  # choix pour l'acces direct (valeur = position dans la file du mode courant)
+  # choices for the direct-access field (value = position in the current queue)
   goto_of <- function(rows) stats::setNames(seq_along(rows), lm_df$Genus.species[rows])
   choices_recon <- goto_of(q_recon); choices_corr <- goto_of(q_corr)
   choices_new   <- stats::setNames(seq_along(new_photos), basename(new_photos))
 
-  # Lecteur d'image ROBUSTE : l'extension ment souvent (~7% des .jpg sont en fait
-  # des GIF/PNG/BMP), donc on detecte le VRAI format par les octets magiques et on
-  # route vers le bon lecteur. JPEG/PNG via jpeg/png (rapide) ; GIF/BMP/TIFF ou
+  # ROBUST image reader: the extension lies often (~7% of the .jpg files are in
+  # fact GIF/PNG/BMP), so the REAL format is detected from the magic bytes and
+  # routed to the right reader. JPEG/PNG through jpeg/png (fast); GIF/BMP/TIFF
   # tout format non natif via magick (ImageMagick) converti en tableau [H,W,3].
   read_img <- function(path) {
     sig <- tryCatch(readBin(path, "raw", n = 8L), error = function(e) raw(0))
@@ -844,9 +947,9 @@ launch_fishmorph_digitizer <- function(
       all(sig[1:8] == as.raw(c(0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A)))
     if (is_jpeg && requireNamespace("jpeg", quietly = TRUE)) return(jpeg::readJPEG(path))
     if (is_png  && requireNamespace("png",  quietly = TRUE)) return(png::readPNG(path))
-    # tout le reste (GIF/BMP/TIFF, ou .jpg mal etiquete) -> magick, qui RE-ENCODE
-    # en PNG temporaire lu ensuite par png::readPNG (evite tout reshape manuel du
-    # tableau, source de l'image "en rayures" quand on se trompe d'ordre des dims).
+    # everything else (GIF/BMP/TIFF, or a mislabelled .jpg) -> magick, which
+    # RE-ENCODES to a temporary PNG then read by png::readPNG (this avoids any
+    # manual reshape of the array, the source of the "striped" image).
     if (requireNamespace("magick", quietly = TRUE) &&
         requireNamespace("png", quietly = TRUE)) {
       im  <- magick::image_read(path)
@@ -854,18 +957,18 @@ launch_fishmorph_digitizer <- function(
       magick::image_write(im, tmp, format = "png")
       return(png::readPNG(tmp))
     }
-    # dernier recours : tenter jpeg puis png (peut echouer proprement)
+    # last resort: try jpeg then png (it may fail cleanly)
     out <- tryCatch(jpeg::readJPEG(path), error = function(e)
              tryCatch(png::readPNG(path), error = function(e2) NULL))
     if (is.null(out))
       stop("Format d'image non lisible (", toupper(tools::file_ext(path)),
-           " reel different de l'extension). Installez le package 'magick'.",
+           " differs from its extension). Install the 'magick' package.",
            call. = FALSE)
     out
   }
 
   # --- UI --------------------------------------------------------------------
-  # clic droit maintenu sur la photo = deplacer la vue (envoie des deltas a Shiny)
+  # right-button drag on the photograph pans the view (deltas sent to Shiny)
   pan_js <- shiny::HTML(paste(
     "(function(){var dg=false,lx=0,ly=0,adx=0,ady=0,c=0,raf=null;",
     "function el(){return document.getElementById('plot');}",
@@ -875,116 +978,256 @@ launch_fishmorph_digitizer <- function(
     "document.addEventListener('mousemove',function(e){if(!dg)return;var m=el();if(!m)return;var r=m.getBoundingClientRect();adx+=(e.clientX-lx)/r.width;ady+=(e.clientY-ly)/r.height;lx=e.clientX;ly=e.clientY;if(!raf)raf=requestAnimationFrame(flush);});",
     "document.addEventListener('mouseup',function(e){if(e.button===2){dg=false;if(!raf)raf=requestAnimationFrame(flush);}});",
     "})();", sep = "\n"))
-  ui <- shiny::fluidPage(
-    shiny::tags$head(shiny::tags$script(pan_js)),
-    shiny::tags$style(".irs{margin-bottom:2px}"),
-    shiny::titlePanel("FISHMORPH - segments -> landmarks (digitalisation guidee)"),
-    shiny::sidebarLayout(
-      shiny::sidebarPanel(
-        width = 3,
-        shiny::uiOutput("progress"),
-        # --- mode "new" : identite du specimen + barre d'echelle --------------
-        shiny::conditionalPanel(
-          "input.mode == 'new'",
-          shiny::hr(),
-          shiny::h5("Nouveau specimen"),
-          shiny::textInput("new_species", "Nom d'espece (Genre espece)", ""),
-          shiny::helpText("Pre-rempli depuis le nom du fichier photo ; corrigez-le",
-                          "si besoin. C'est cette valeur qui est ecrite dans la",
-                          "colonne Genus.species de la feuille des nouveaux",
-                          "specimens."),
-          shiny::numericInput("ruler_mm", "Barre d'echelle 20-21 : longueur reelle (mm)",
-                              value = ruler_mm, min = 0, step = 1),
-          shiny::helpText("Optionnel. Posez les points 20 et 21 aux deux extremites",
-                          "de la reference (regle, etiquette) : mm_per_px =",
-                          "longueur reelle / distance 20-21 en pixels. Non poses,",
-                          "mm_per_px reste NA et les coordonnees restent en pixels."),
-          shiny::uiOutput("new_photo_lab")),
-        shiny::hr(),
-        shiny::div(
-          shiny::actionButton("zoom_in", "Zoom +"),
-          shiny::actionButton("zoom_out", "Zoom -"),
-          shiny::actionButton("zoom_reset", "Vue entiere")),
-        shiny::helpText("Zoom : boutons +/- ; clic droit maintenu = se deplacer sur",
-                        "la photo ; double-clic = vue entiere."),
-        shiny::radioButtons("flip_mode", "Retourner la photo (+ landmarks)",
-          c("Aucun" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
-          selected = "none", inline = TRUE),
-        shiny::radioButtons("flip_disp", "Retourner la photo SEULE (landmarks fixes)",
-          c("Aucun" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
-          selected = "none", inline = TRUE),
-        shiny::helpText("La 2e option ne retourne QUE l'affichage de la photo :",
-                        "les landmarks (et l'enregistrement) ne bougent pas. Utile",
-                        "quand les points charges sont en miroir de la photo. Reste",
-                        "actif d'une espece a l'autre."),
-        shiny::hr(),
-        shiny::checkboxInput("flipdorsal", "Inverser dorsal/ventral", FALSE),
-        shiny::checkboxInput("correct",
-          "Respecter les conventions (edition contrainte)", FALSE),
-        shiny::checkboxInput("checkextremes",
-          "Verifier 3/4 (extremes) a l'enregistrement", TRUE),
-        shiny::helpText("A l'enregistrement, verifie que 3 est le point le plus",
-                        "DORSAL et 4 le plus VENTRAL (hauteurs mesurees",
-                        "perpendiculairement a l'axe du corps). Exclus : caudale",
-                        "(16-19), extremites d'appendices (12, 15) et points",
-                        "ventraux derives (8, 9, 11). En cas",
-                        "d'ecart, propose de remesurer ou de corriger",
-                        "automatiquement."),
-        shiny::checkboxInput("showlines", "Lignes de repere (contour/oeil/ventre)", TRUE),
-        shiny::checkboxInput("fastdisp", "Affichage rapide (photo allegee)", TRUE),
-        shiny::hr(),
-        shiny::h5("Placement initial (graine, avant vos clics)"),
-        shiny::helpText("Ces curseurs ne fixent que la POSITION DE DEPART des points que",
-                        "les segments ne contraignent pas (position le long du corps,",
-                        "partage haut/bas, angles des nageoires/machoire). Des que vous",
-                        "cliquez un point, votre clic remplace la graine ; utiles surtout",
-                        "pour degrossir avant de cliquer."),
-        shiny::sliderInput("f_Bd", "Bd position", 0, 1, .47, .01),
-        shiny::sliderInput("o_Bd", "Bd part dorsale", 0, 1, .50, .01),
-        shiny::sliderInput("f_Hd", "Hd position", 0, 1, .10, .01),
-        shiny::sliderInput("o_Hd", "Hd part dorsale", 0, 1, .43, .01),
-        shiny::sliderInput("f_eye", "Oeil position", 0, 1, .10, .01),
-        shiny::sliderInput("o_eye", "Oeil hauteur (bas du corps)", 0, 1.5, .82, .01),
-        shiny::sliderInput("f_PF", "Pectorale position", 0, 1, .25, .01),
-        shiny::sliderInput("o_PF", "Pectorale part dorsale", -1, 1, -.69, .01),
-        shiny::sliderInput("f_CP", "Pedoncule position", .5, 1, .93, .01),
-        shiny::sliderInput("ang_PFl", "PFl angle", 0, 90, 35, 1),
-        shiny::sliderInput("ang_Jl", "Jl angle", -30, 90, 20, 1)
-      ),
-      shiny::mainPanel(
-        width = 9,
-        # barre d'actions au-dessus de la photo, avec les numeros de points
-        shiny::div(style = "margin-bottom:6px;",
-          shiny::div(style = "display:inline-block;vertical-align:middle;margin-right:14px;",
-            shiny::radioButtons("mode", NULL,
-              c("A reconstruire" = "reconstruct", "Corriger existants" = "correct",
-                "Nouvelles photos" = "new"),
-              selected = mode, inline = TRUE)),
-          shiny::actionButton("prev", "< Precedent"),
-          shiny::actionButton("nextsp", "Suivant >"),
-          shiny::span(style = "display:inline-block;width:14px;"),
-          shiny::actionButton("set_na", "Marquer NA"),
-          shiny::actionButton("save", "Enregistrer & suivant", class = "btn-primary"),
-          shiny::actionButton("skip", "Passer"),
-          shiny::span(style = "display:inline-block;width:14px;"),
-          shiny::actionButton("flush", "Ecrire le classeur"),
-          shiny::span(style = "display:inline-block;width:14px;"),
-          shiny::div(style = "display:inline-block;vertical-align:middle;min-width:280px;",
-            shiny::selectizeInput("goto_species", NULL, choices = NULL,
-              selected = NULL, width = "280px",
-              options = list(placeholder = "Aller a une espece...")))),
-        shiny::uiOutput("lm_buttons"),
-        shiny::plotOutput("plot", height = "620px", click = "click",
-          dblclick = "img_dblclick"),
-        shiny::fluidRow(
-          shiny::column(7,
-            shiny::h5("Controle : segment cible vs. reconstruit (px)"),
-            shiny::tableOutput("rt")),
-          shiny::column(5, shiny::verbatimTextOutput("status"))
-        )
-      )
-    )
+  # bslib is only an appearance layer: without it the application is identical,
+  # just plainer. No feature depends on it.
+  has_bslib <- requireNamespace("bslib", quietly = TRUE) &&
+    utils::packageVersion("bslib") >= "0.5.0"
+
+  app_css <- paste0(
+    ".irs{margin-bottom:2px}",
+    # the action bars are single rows: the form-group margins the selectize and
+    # the checkboxes would add are removed
+    ".actionbar .form-group{margin-bottom:0;}",
+    ".actionbar .btn{margin-right:4px;}",
+    ".actionbar .selectize-control{margin-bottom:0;}",
+    # a denser side panel: the tabs already separate the groups, so the vertical
+    # rhythm inside a tab can be tighter
+    ".sidetabs .tab-content{padding-top:10px;}",
+    ".sidetabs .form-group{margin-bottom:10px;}",
+    ".sidetabs .shiny-input-container{width:100% !important;}",
+    ".sidetabs .help-block{font-size:11.5px;line-height:1.35;color:#6b7280;}",
+    ".sidetabs .nav-link{padding:5px 9px;font-size:12.5px;}",
+    # the queue selector at the head of the panel: boxed, it reads as the state
+    # of the session rather than as one more control
+    ".modebar{background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;",
+    "padding:6px 10px 0 10px;margin-bottom:10px;}",
+    ".modebar .form-group{margin-bottom:4px;}",
+    ".modebar .control-label{font-size:12px;color:#6b7280;margin-bottom:2px;}",
+    ".progressbox{background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;",
+    "padding:8px 10px;font-size:13px;line-height:1.5;}",
+    ".sessionbar{font-size:12px;color:#6b7280;padding:2px 0 8px 0;",
+    "border-bottom:1px solid #e5e7eb;margin-bottom:10px;}",
+    ".sessionbar code{font-size:11.5px;color:#374151;background:#f3f4f6;",
+    "padding:1px 5px;border-radius:4px;}",
+    # The landmark bar is the real navigation of the application. One row, never
+    # wrapped: the buttons share the width (flex:1 1 0), so a point keeps its
+    # so a point keeps its place on screen whatever the window size. A wrap
+    # would turn the glance into a search.
+    ".lmrow{display:flex;flex-wrap:nowrap;gap:3px;align-items:stretch;",
+    "overflow-x:auto;margin-bottom:6px;padding-bottom:2px;}",
+    ".lmrow .lmbtn{flex:1 1 0;min-width:30px;padding:7px 0;font-size:14px;",
+    "line-height:1.1;text-align:center;border:1px solid #ccc;border-radius:6px;",
+    "cursor:pointer;}",
+    # floor under the photograph: a narrower device draws nothing useful
+    "#plot{min-width:360px;min-height:360px;}",
+    "#set_na{font-weight:600;}",
+    ".app-title{font-family:'Inter','SF Pro Display','Segoe UI Variable',",
+    "'Helvetica Neue',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;",
+    "letter-spacing:-0.015em;}",
+    ".app-title-name{font-weight:800;}",
+    ".app-title-sub{font-weight:600;opacity:0.62;}")
+
+  head_tags <- shiny::tags$head(shiny::tags$script(pan_js),
+                                shiny::tags$style(shiny::HTML(app_css)))
+
+  app_title <- shiny::tags$span(
+    class = "app-title",
+    shiny::tags$span(class = "app-title-name", "FishMORPH"),
+    shiny::tags$span(class = "app-title-sub",
+                     " — segments vers landmarks, digitalisation guidee"))
+
+  # a card when bslib is there, a bordered div otherwise. `fill = FALSE` on
+  # purpose: a filling card negotiates its height with its siblings, and the
+  # photograph above loses the argument -- that is how a 620 px plot ends up in
+  # peripherique plus petit que ses propres marges.
+  card_box <- function(title, ...) {
+    if (has_bslib)
+      bslib::card(bslib::card_header(title), bslib::card_body(..., gap = "6px"),
+                  fill = FALSE)
+    else
+      shiny::div(class = "well", style = "padding:10px;",
+                 shiny::tags$strong(title), ...)
+  }
+
+  # --- panneau lateral : un onglet par rythme d'usage --------------------------
+  # The settings are not touched at the same rhythm -- once per specimen
+  # (identity, scale), once per photograph (flips), once per session (seeding
+  # sliders, checks) -- and stacking them in one column put the most used ones
+  # below the least used ones.
+  side_tabs <- shiny::tabsetPanel(
+    id = "sidetab", type = if (has_bslib) "pills" else "tabs",
+
+    shiny::tabPanel(
+      "Specimen",
+      shiny::conditionalPanel(
+        "input.mode == 'new'",
+        shiny::textInput("new_species", "Species name (Genus species)", ""),
+        shiny::helpText("Pre-filled from the photograph file name; correct it if",
+                        "needed. It is this value that is written into the",
+                        "Genus.species column of the sheet of new",
+                        "specimens."),
+        shiny::numericInput("ruler_mm", "Scale bar 20-21: real length (mm)",
+                            value = ruler_mm, min = 0, step = 1),
+        shiny::helpText("Optional. Place points 20 and 21 at the two ends of the",
+                        "reference (a ruler, a label): mm_per_px = real length /",
+                        "their distance in pixels. Left unplaced, mm_per_px stays",
+                        "NA and the coordinates stay in pixels."),
+        shiny::uiOutput("new_photo_lab")),
+      shiny::conditionalPanel(
+        "input.mode != 'new'",
+        shiny::helpText("Les champs d'identite ne servent qu'en mode",
+                        "\"New photographs\" mode: elsewhere, the species is the",
+                        "one of the workbook row.")),
+      shiny::hr(),
+      shiny::strong("Edition"),
+      shiny::checkboxInput("flipdorsal", "Flip dorsal/ventral", FALSE),
+      shiny::checkboxInput("correct",
+        "Enforce the conventions (constrained editing)", FALSE),
+      shiny::helpText("Moving a point then propagates the FISHMORPH conventions",
+                      "to the points that depend on it: segment 3-4",
+                      "perpendicular to the axis, eye group on one vertical,",
+                      "belly line aligned. Unticked, each point moves alone.")),
+
+    shiny::tabPanel(
+      "Display",
+      shiny::checkboxInput("showlines", "Reference lines (outline/eye/belly)", TRUE),
+      shiny::checkboxInput("fastdisp", "Fast display (lightened photograph)", TRUE),
+      shiny::radioButtons("flip_mode", "Flip the photograph (+ landmarks)",
+        c("Aucun" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
+        selected = "none", inline = TRUE),
+      shiny::radioButtons("flip_disp", "Flip the photograph ONLY (landmarks fixed)",
+        c("Aucun" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
+        selected = "none", inline = TRUE),
+      shiny::helpText("The second option flips ONLY the display of the",
+                      "photograph: the landmarks (and the record) do not move.",
+                      "Useful when the loaded points are mirrored relative to the",
+                      "photograph. It persists from one species to the next.")),
+
+    shiny::tabPanel(
+      "Checks",
+      shiny::checkboxInput("checkextremes",
+        "Check the conventions on save (3/4 extremes, eye vertical)", TRUE),
+      shiny::helpText("On save, checks that 3 is the most DORSAL point and 4 the",
+                      "most VENTRAL one (heights measured perpendicular to the",
+                      "body axis). Excluded: the caudal fin (16-19), the",
+                      "appendage tips (12, 15) and the derived ventral points",
+                      "(8, 9, 11). On a breach, offers to measure again or to",
+                      "correct automatically."),
+      shiny::helpText("Also checks the ORDER of the eye vertical -- 5, 13, 7,",
+                      "14, 6, 8 from the back downwards -- and that 5 tops the",
+                      "group. An inversion (the eye clicked bottom-first, 7",
+                      "outside 13-14, 5 below 13) leaves every pair internally",
+                      "consistent, so Ed keeps its length while Hd or Eh refers",
+                      "to the wrong point. It is never corrected automatically:",
+                      "moving a point to satisfy the order would invent a",
+                      "measurement."),
+      shiny::hr(),
+      shiny::strong("Workbook and journal"),
+      shiny::uiOutput("io_info"),
+      shiny::actionButton("flush", "Write the workbook", class = "btn-primary"),
+      shiny::helpText("The workbook is rewritten every", xlsx_flush_every,
+                      "record(s), atomically. The journal is written at EVERY",
+                      "record and is the source of truth:",
+                      "fishmorph_consolidate() reconstruit tout a partir de lui.")),
+
+    shiny::tabPanel(
+      "Seed",
+      shiny::helpText("These sliders only set the STARTING POSITION of the points",
+                      "the segments do not constrain (position along the body,",
+                      "top/bottom share, fin and jaw angles). As soon as you",
+                      "click a point, your click replaces the seed; they are",
+                      "useful mostly to rough things out before clicking."),
+      shiny::sliderInput("f_Bd", "Bd position", 0, 1, .47, .01),
+      shiny::sliderInput("o_Bd", "Bd part dorsale", 0, 1, .50, .01),
+      shiny::sliderInput("f_Hd", "Hd position", 0, 1, .10, .01),
+      shiny::sliderInput("o_Hd", "Hd part dorsale", 0, 1, .43, .01),
+      shiny::sliderInput("f_eye", "Oeil position", 0, 1, .10, .01),
+      shiny::sliderInput("o_eye", "Eye height (from the body underside)", 0, 1.5, .82, .01),
+      shiny::sliderInput("f_PF", "Pectorale position", 0, 1, .25, .01),
+      shiny::sliderInput("o_PF", "Pectorale part dorsale", -1, 1, -.69, .01),
+      shiny::sliderInput("f_CP", "Pedoncule position", .5, 1, .93, .01),
+      shiny::sliderInput("ang_PFl", "PFl angle", 0, 90, 35, 1),
+      shiny::sliderInput("ang_Jl", "Jl angle", -30, 90, 20, 1)))
+
+  # The queue selector at the head of the side panel: it decides what the whole
+  # session is doing -- which species are offered and what
+  # "Save & next" means -- so it belongs to the state of the session,
+  # rangee d'actions par specimen ou il etait a un bouton de "Save".
+  side_panel <- shiny::div(
+    class = "sidetabs",
+    shiny::div(class = "modebar",
+      shiny::radioButtons("mode", "Queue",
+        c("To reconstruct" = "reconstruct", "Correct existing" = "correct",
+          "New photographs" = "new"), selected = mode, inline = FALSE)),
+    shiny::uiOutput("progress"), shiny::br(), side_tabs)
+
+  main_panel <- shiny::tagList(
+    # what the session IS, on one line: the paths are declared at the console,
+    # they are therefore displayed and not editable.
+    shiny::div(class = "sessionbar", shiny::uiOutput("session_info")),
+    # --- action bar, right above the photograph -------------------------------
+    # Everything done once per specimen on one row, where the eye already is:
+    # the queue, the saving. Nothing here forces a trip back down to the side
+    # panel in the middle of an entry.
+    shiny::div(class = "actionbar", style = "margin-bottom:6px;",
+      shiny::actionButton("prev", "< Previous"),
+      shiny::actionButton("nextsp", "Next >"),
+      shiny::span(style = "display:inline-block;width:14px;"),
+      shiny::actionButton("save", "Save & next", class = "btn-primary"),
+      shiny::actionButton("skip", "Skip"),
+      shiny::span(style = "display:inline-block;width:14px;"),
+      shiny::div(style = "display:inline-block;vertical-align:middle;min-width:280px;",
+        shiny::selectizeInput("goto_species", NULL, choices = NULL,
+          selected = NULL, width = "280px",
+          options = list(placeholder = "Jump to a species...")))),
+    # --- active-point bar -----------------------------------------------------
+    # "Mark NA" acts on the point under the cursor: its place is against the
+    # landmark bar, not against "Save & next" where a slip of one
+    # button saved the specimen.
+    shiny::div(class = "actionbar", style = "margin-bottom:4px;",
+      shiny::actionButton("set_na", "Mark NA", class = "btn-warning"),
+      shiny::span(style = "display:inline-block;width:14px;"),
+      shiny::actionButton("zoom_in", "Zoom +"),
+      shiny::actionButton("zoom_out", "Zoom -"),
+      shiny::actionButton("zoom_reset", "Whole view"),
+      shiny::span(style = "font-size:12px;color:#6b7280;margin-left:10px;",
+        "Right-click and drag to pan; double-click for the whole view;",
+        "the zoom centres on the active point.")),
+    shiny::uiOutput("lm_buttons"),
+    shiny::plotOutput("plot", height = "620px", click = "click",
+      dblclick = "img_dblclick"),
+    shiny::fluidRow(
+      shiny::column(7, card_box("Control: target vs. reconstructed segment (px)",
+                                shiny::tableOutput("rt"))),
+      shiny::column(5, card_box("Status", shiny::verbatimTextOutput("status")))),
+    # --- reference, en pied de page -------------------------------------------
+    # The entry order, the conventions and the colour code are read on the first
+    # specimen and never again. Above the photograph they cost three lines of
+    # scroll on each of the following thousands.
+    card_box("Entry order, conventions and colour code",
+             shiny::uiOutput("lm_legend"))
   )
+
+  ui <- if (has_bslib) {
+    # `fillable = FALSE`: this page is a document that scrolls, not a dashboard.
+    # In a filling page every child negotiates a share of the height, and the
+    # photograph -- which asks for 620 px -- is squeezed by the bars above and
+    # the panels below.
+    bslib::page_sidebar(
+      title = app_title,
+      theme = bslib::bs_theme(version = 5, primary = "#2563eb",
+                              "border-radius" = "0.5rem"),
+      fillable = FALSE,
+      sidebar = bslib::sidebar(width = 360, open = "desktop", side_panel),
+      head_tags, main_panel)
+  } else {
+    shiny::fluidPage(
+      head_tags,
+      shiny::titlePanel(app_title, windowTitle = "FishMORPH digitizer"),
+      shiny::sidebarLayout(
+        shiny::sidebarPanel(width = 3, side_panel),
+        shiny::mainPanel(width = 9, main_panel)))
+  }
 
   # --- serveur ---------------------------------------------------------------
   server <- function(input, output, session) {
@@ -993,35 +1236,35 @@ launch_fishmorph_digitizer <- function(
       A = NULL, B = NULL, P = NULL, override = list(), saved = integer(0),
       sel = 1L, zoom = 1, cx = NULL, cy = NULL, hx = NULL, hy = NULL,
       arr = NULL, flip = "none", dispflip = "none", na = integer(0),
-      newstamp = 0L,         # incremente a chaque ecriture dans new_sheet
-      flushstamp = 0L,       # incremente a chaque ecriture du classeur
-      edited = integer(0),   # points DEPLACES par l'utilisateur cette session
-                             # (distincts des points simplement charges du classeur)
-      adjusted = integer(0)) # points recales par la convention des extremes
-                             # (statut "adjusted" dans le journal)
+      newstamp = 0L,         # incremented at every write into new_sheet
+      flushstamp = 0L,       # incremented at every write of the workbook
+      edited = integer(0),   # points MOVED by the user during this session
+                             # (as opposed to points merely loaded from the workbook)
+      adjusted = integer(0)) # points snapped by the extreme-point convention
+                             # (status "adjusted" in the journal)
 
-    # file et liste d'acces direct du mode courant. En mode "new" la file indexe
-    # les PHOTOS de new_photo_dir (et non des lignes de lm_df).
+    # queue and direct-access list of the current mode. In "new" mode the queue
+    # indexes the PHOTOGRAPHS of new_photo_dir (and not rows of lm_df).
     qrows    <- shiny::reactive(switch(rv$mode, correct = q_corr, new = q_new, q_recon))
     goto_now <- shiny::reactive(switch(rv$mode, correct = choices_corr,
                                        new = choices_new, choices_recon))
     is_new   <- shiny::reactive(identical(rv$mode, "new"))
-    # ordre de saisie et points affiches : + barre d'echelle 20/21 en mode "new"
+    # entry order and points displayed: + the scale bar 20/21 in "new" mode
     click_order <- shiny::reactive(if (is_new()) .FM_CLICK_ORDER_NEW else .FM_CLICK_ORDER)
     lm_pts      <- shiny::reactive(if (is_new()) .FM_LM_PTS_NEW else .FM_LM_PTS)
 
-    # peuplement cote serveur du champ d'acces direct : la liste n'est jamais
-    # rendue entierement dans le navigateur (filtrage/pagination cote serveur).
-    # NB : on utilise les choix du mode INITIAL (valeur `mode`), pas la reactive
-    # goto_now(), car on est ici hors contexte reactif.
+    # server-side population of the direct-access field: the list is never
+    # rendered whole in the browser (server-side filtering/pagination).
+    # NB: the choices of the INITIAL mode (the `mode` value) are used, not the
+    # goto_now() reactive, because we are outside a reactive context here.
     shiny::updateSelectizeInput(session, "goto_species",
       choices = switch(mode, correct = choices_corr, new = choices_new, choices_recon),
       selected = 1L, server = TRUE)
 
-    # retournement + affichage : on retourne le TABLEAU image (numerique) puis, si
-    # l'affichage rapide est actif, on le sous-echantillonne pour le rendu. Les
-    # COORDONNEES restent en pixels d'origine (rv$w/rv$h inchanges), donc clics et
-    # enregistrement ne sont pas affectes -- seule la nettete a l'ecran change.
+    # flipping + display: the image ARRAY (numeric) is flipped, then, if the
+    # fast display is on, sub-sampled for rendering. The COORDINATES stay in
+    # original pixels (rv$w/rv$h unchanged), so clicks and records are not
+    # affected -- only the sharpness on screen changes.
     flip_arr <- function(a, mode) {
       d <- dim(a); H <- d[1]; W <- d[2]
       if (length(d) == 3) {
@@ -1041,8 +1284,8 @@ launch_fishmorph_digitizer <- function(
     }
     make_disp <- function() {
       if (is.null(rv$arr)) return(NULL)
-      a <- flip_arr(rv$arr, rv$flip)          # retournement "photo + landmarks"
-      a <- flip_arr(a, rv$dispflip)           # retournement PUREMENT visuel (points fixes)
+      a <- flip_arr(rv$arr, rv$flip)          # "photo + landmarks" flip
+      a <- flip_arr(a, rv$dispflip)           # PURELY visual flip (points fixed)
       if (isTRUE(input$fastdisp)) a <- downscale(a)
       grDevices::as.raster(a)
     }
@@ -1054,29 +1297,29 @@ launch_fishmorph_digitizer <- function(
     }
     remap <- function(p, oldm, newm) flip_pt(flip_pt(p, oldm), newm)
 
-    # cur_idx = position dans la file (ligne de lm_df, ou index de photo si "new")
+    # cur_idx = position in the queue (row of lm_df, or photo index if "new")
     cur_idx  <- shiny::reactive(qrows()[rv$qi])
     cur_row  <- shiny::reactive(if (is_new()) NA_integer_ else cur_idx())
     cur_key  <- shiny::reactive(if (is_new()) NA_character_ else lm_df$.key[cur_row()])
-    # chemin de la photo courante : index des photos du classeur, ou fichier brut
+    # path of the current photograph: the workbook photo index, or the raw file
     cur_photo <- shiny::reactive({
       i <- cur_idx(); if (length(i) != 1 || is.na(i)) return(NA_character_)
       if (is_new()) new_photos[i] else {
         k <- cur_key(); if (is.na(k) || !k %in% names(photos)) NA_character_ else photos[[k]]
       }
     })
-    # ligne de new_sheet correspondant a un fichier photo (NA si absent). Version
-    # NON reactive : `new_df` n'est pas un reactiveVal, donc la recherche doit
-    # relire l'objet a jour au moment de l'enregistrement -- sinon un second clic
-    # sur "Enregistrer" avant navigation ajouterait une ligne EN DOUBLE.
+    # row of new_sheet matching a photograph file (NA if absent). A NON reactive
+    # version: `new_df` is not a reactiveVal, so the search must re-read the
+    # up-to-date object at save time -- otherwise a second click on "Save"
+    # before navigating would append a DUPLICATE row.
     new_row_of <- function(f) {
       if (length(f) != 1 || is.na(f) || !nrow(new_df) ||
           !"photo_file" %in% names(new_df)) return(NA_integer_)
       h <- which(!is.na(new_df$photo_file) & new_df$photo_file == f)
       if (length(h)) h[1] else NA_integer_
     }
-    # version reactive pour l'affichage : invalidee par la navigation et par
-    # rv$newstamp (incremente apres chaque ecriture dans new_sheet).
+    # reactive version for display: invalidated by navigation and by rv$newstamp
+    # (incremented after every write into new_sheet).
     cur_new_row <- shiny::reactive({
       if (!is_new()) return(NA_integer_)
       rv$newstamp
@@ -1084,16 +1327,16 @@ launch_fishmorph_digitizer <- function(
     })
     cur_name <- shiny::reactive({
       if (!is_new()) return(lm_df$Genus.species[cur_row()])
-      # mode "new" : le champ de saisie fait foi ; a defaut, le nom deja
-      # enregistre dans new_sheet, sinon celui deduit du nom de fichier.
+      # "new" mode: the input field prevails; failing that, the name already
+      # recorded in new_sheet, otherwise the one deduced from the file name.
       nm <- trimws(as.character(input$new_species %||% ""))
       if (nzchar(nm)) return(nm)
       basename(cur_photo())
     })
     cur_seg  <- shiny::reactive({
-      # mode "new" : pas de segments mesures -> pseudo-segments = proportions
-      # medianes FISHMORPH avec Bl = 1 (voir .FM_NEW_RATIOS). Le reste du code
-      # (placement, echelle px/unite, table de controle) est inchange.
+      # "new" mode: no measured segments -> pseudo-segments = the median
+      # FISHMORPH proportions with Bl = 1 (see .FM_NEW_RATIOS). The rest of the
+      # code (placement, px/unit scale, control table) is unchanged.
       if (is_new()) {
         s <- .fm_new_segments()
         return(stats::setNames(lapply(seg_cols, function(nm) as.numeric(s[[nm]])), seg_cols))
@@ -1104,13 +1347,13 @@ launch_fishmorph_digitizer <- function(
       s <- seg_by_key[k, seg_cols]
       stats::setNames(as.list(as.numeric(s)), seg_cols)
     })
-    # scalaire numerique sur : input$... peut etre NULL (input pas encore cree) ou
+    # a safe numeric scalar: input$... may be NULL (input not yet created) or
     # "" -> as.numeric() rend numeric(0), et `if (is.finite(numeric(0)))` echoue.
     num1 <- function(x) {
       v <- suppressWarnings(as.numeric(x))
       if (length(v) != 1 || !is.finite(v)) NA_real_ else v
     }
-    # echelle mm/px depuis les points 20-21 et la longueur de regle saisie
+    # mm/px scale from points 20-21 and the ruler length typed in
     mmpp_of <- function(P) {
       mm <- num1(input$ruler_mm)
       if (!is.finite(mm) || mm <= 0) return(NA_real_)
@@ -1119,14 +1362,14 @@ launch_fishmorph_digitizer <- function(
       if (!is.finite(d) || d <= 0) NA_real_ else mm / d
     }
 
-    # mode "correct" : recharge les 21 landmarks deja enregistres du classeur
-    # (LM1 -> A, LM2 -> B, les autres en overrides) pour les relire / deplacer.
-    # Les points vides (NA dans la feuille) sont marques NA ; LM23 est derive et
-    # n'est donc pas recharge (il est recalcule apres coup). L'axe et l'echelle
-    # decoulent des LM1/LM2 charges, meme si les segments manquent.
-    # `df`/`row` : par defaut la feuille des landmarks a la ligne courante ; en
-    # mode "new" on passe new_df et la ligne deja enregistree pour cette photo.
-    # `pts` : points a recharger (les 21 landmarks, + 20/21 en mode "new").
+    # "correct" mode: reloads the 21 landmarks already recorded in the workbook
+    # (LM1 -> A, LM2 -> B, the others as overrides) to review / move them.
+    # Empty points (NA in the sheet) are marked NA; LM23 is derived and is
+    # therefore not reloaded (it is recomputed afterwards). The axis and the
+    # scale follow from the LM1/LM2 loaded, even when the segments are missing.
+    # `df`/`row`: by default the landmark sheet at the current row; in "new"
+    # mode new_df and the row already recorded for this photograph are passed.
+    # `pts`: points to reload (the 21 landmarks, + 20/21 in "new" mode).
     seed_from_existing <- function(df = lm_df, row = cur_row(),
                                    pts = setdiff(.FM_LM_PTS, c(1L, 2L, 23L)),
                                    extra = c(24L, 25L)) {
@@ -1145,14 +1388,14 @@ launch_fishmorph_digitizer <- function(
         xy <- getxy(pt)
         if (all(is.finite(xy))) ov[[as.character(pt)]] <- xy else na <- c(na, pt)
       }
-      for (pt in extra) {                          # charnieres : chargees si presentes,
-        xy <- getxy(pt)                            # sinon simplement non posees (pas NA)
+      for (pt in extra) {                          # hinges: loaded if present,
+        xy <- getxy(pt)                            # otherwise simply not placed (not NA)
         if (all(is.finite(xy))) ov[[as.character(pt)]] <- xy
       }
-      rv$override <- ov; rv$na <- na; rv$sel <- 22L  # charniere active a l'ouverture
+      rv$override <- ov; rv$na <- na; rv$sel <- 22L  # hinge active on opening
     }
-    # mode "new" : recharge une photo deja enregistree dans new_sheet. La barre
-    # d'echelle (20/21) est rechargee mais n'est jamais marquee NA -- elle est
+    # "new" mode: reloads a photograph already recorded in new_sheet. The scale
+    # bar (20/21) is reloaded but is never marked NA -- it is
     # optionnelle, absente = "non posee" et non "non mesurable".
     seed_from_new <- function() {
       r <- cur_new_row(); if (is.na(r)) return()
@@ -1173,8 +1416,8 @@ launch_fishmorph_digitizer <- function(
       rv$flip <- "none"; rv$img <- make_disp()
       shiny::updateRadioButtons(session, "flip_mode", selected = "none")
       if (is_new()) {
-        # nom d'espece : celui deja enregistre pour cette photo, sinon deduit du
-        # nom de fichier. Recharge aussi les points si la photo a deja ete faite.
+        # species name: the one already recorded for this photograph, otherwise
+        # the one deduced from the file name. Also reloads the points if the
         r <- cur_new_row()
         nm <- if (!is.na(r) && "Genus.species" %in% names(new_df))
                 as.character(new_df[r, "Genus.species"]) else NA_character_
@@ -1186,9 +1429,9 @@ launch_fishmorph_digitizer <- function(
         if (!is.na(r)) seed_from_new()
         return()
       }
-      # recharge les landmarks enregistres si l'espece en a deja : toujours en mode
-      # "correct", et aussi en mode "reconstruire" pour une espece deja sauvegardee
-      # (sinon revenir dessus repartait des positions calculees -> 24/25 perdus).
+      # reloads the recorded landmarks if the species already has some: always in
+      # "correct" mode, and also in "reconstruct" mode for a species already
+      # saved (otherwise coming back to it restarted from computed positions
       row0 <- cur_row()
       has_saved <- !is.na(row0) && "1_X" %in% names(lm_df) &&
         is.finite(suppressWarnings(as.numeric(lm_df[row0, "1_X"])))
@@ -1196,8 +1439,8 @@ launch_fishmorph_digitizer <- function(
     }
     shiny::observeEvent(rv$qi, load_species(), ignoreInit = FALSE)
 
-    # bascule de mode : change de file, revient a la 1re espece, recharge la
-    # liste d'acces direct et l'espece courante
+    # mode switch: changes queue, goes back to the 1st species, reloads the
+    # direct-access list and the current species
     shiny::observeEvent(input$mode, {
       if (identical(input$mode, rv$mode)) return()
       rv$mode <- input$mode
@@ -1215,7 +1458,7 @@ launch_fishmorph_digitizer <- function(
       d
     })
 
-    # reconstruction courante (matrice 22x2), avec overrides manuels appliques
+    # current reconstruction (22x2 matrix), with the manual overrides applied
     recon <- shiny::reactive({
       shiny::req(rv$A, rv$B)
       seg <- cur_seg()
@@ -1227,26 +1470,26 @@ launch_fishmorph_digitizer <- function(
       }
       P <- .fm_place(seg2, rv$A, rv$B, pr)
       for (k in names(rv$override)) P[as.integer(k), ] <- rv$override[[k]]
-      if (length(rv$na)) P[rv$na, ] <- NA_real_          # points marques non mesurables
+      if (length(rv$na)) P[rv$na, ] <- NA_real_          # points marked non-measurable
       if (isTRUE(input$correct)) {
-        # les conventions ne "protegent" que les points que TU as deplaces cette
-        # session (rv$edited), pas les points simplement recharges du classeur en
-        # mode correction -- sinon, tous etant des overrides, plus rien ne suivrait
-        # (ex. bouger le 4 ne ramenait plus 8/9/11 sur la ligne du ventre).
-        # longueur cible PFl en pixels (echelle = axe brise Bl) -> 12 = 10 + PFl*uf
+        # the conventions only "protect" the points YOU moved during this session
+        # (rv$edited), not the points merely reloaded from the workbook in
+        # correction mode -- otherwise, all being overrides, nothing would follow
+        # anything (e.g. moving 4 no longer brought 8/9/11 back onto the belly line).
+        # target PFl length in pixels (scale = the broken axis Bl) -> 12 = 10 + PFl*uf
         blpx <- .fm_axis_len_px(P)
         ppu <- blpx / as.numeric(seg$Bl)
-        # en mode "new" PFl n'est PAS mesure (c'est une mediane de graine) : on ne
-        # verrouille donc pas la longueur 10-12, on garde seulement le parallelisme.
+        # in "new" mode PFl is NOT measured (it is a seeding median): the length
+        # 10-12 is therefore not locked, only the parallelism is kept.
         pfl_px <- if (is_new() || !is.finite(ppu)) NA_real_
                   else as.numeric(seg$PFl) * ppu
         P <- .fm_constrain(P, rv$edited, pfl_px = pfl_px)
       }
-      P[23, ] <- .fm_point23(P)     # 23 toujours recalcule (auto) apres edition/conventions
+      P[23, ] <- .fm_point23(P)     # 23 always recomputed (auto) after editing/conventions
       P
     })
 
-    # centre le zoom sur le point actif (s'il a une position)
+    # centres the zoom on the active point (when it has a position)
     zoom_to_sel <- function() {
       if (is.null(rv$A) || is.null(rv$B)) return()
       P <- try(recon(), silent = TRUE); if (inherits(P, "try-error")) return()
@@ -1254,30 +1497,30 @@ launch_fishmorph_digitizer <- function(
         rv$cx <- P[rv$sel, 1]; rv$cy <- P[rv$sel, 2] }
     }
 
-    # clic sur la photo : pose le point ACTIF, puis avance automatiquement
+    # click on the photograph: places the ACTIVE point, then auto-advances
     shiny::observeEvent(input$click, {
       if (is.null(rv$img)) return()
       pt <- c(input$click$x, input$click$y); s <- rv$sel
       if (s == 1L) rv$A <- pt
       else if (s == 2L) rv$B <- pt
-      else {  # re-insere en fin de liste : le dernier point deplace pilote son groupe
+      else {  # re-inserted at the end of the list: the last point moved drives its group
         ov <- rv$override; k <- as.character(s)
         ov[[k]] <- NULL; ov[[k]] <- pt; rv$override <- ov
-        if (s %in% rv$na) rv$na <- setdiff(rv$na, s)   # re-place -> n'est plus NA
-        rv$edited <- union(rv$edited, s)               # point deplace a la main
-        # un point recale par la convention puis repointe a la main redevient une
-        # MESURE : il ne doit plus sortir "adjusted" dans le journal.
+        if (s %in% rv$na) rv$na <- setdiff(rv$na, s)   # re-placed -> no longer NA
+        rv$edited <- union(rv$edited, s)               # point moved by hand
+        # a point snapped by the convention then pointed at again by hand becomes
+        # a MEASUREMENT again: it must no longer come out as "adjusted".
         rv$adjusted <- setdiff(rv$adjusted, s)
       }
       rv$sel <- .fm_next(s, click_order())
     })
 
-    # barre de boutons : selectionne le point actif
+    # button bar: selects the active point
     shiny::observeEvent(input$sel_btn, { rv$sel <- as.integer(input$sel_btn); zoom_to_sel() })
 
-    # marquer le point actif comme NA (non mesurable) puis avancer
+    # marks the active point as NA (non-measurable) then advances
     shiny::observeEvent(input$set_na, {
-      if (rv$sel %in% c(1L, 2L)) return()          # museau/caudale requis pour l'axe
+      if (rv$sel %in% c(1L, 2L)) return()          # snout/caudal required for the axis
       rv$na <- union(rv$na, rv$sel)
       rv$adjusted <- setdiff(rv$adjusted, rv$sel)
       ov <- rv$override; ov[[as.character(rv$sel)]] <- NULL; rv$override <- ov
@@ -1290,7 +1533,7 @@ launch_fishmorph_digitizer <- function(
       if (rv$zoom == 1) { rv$cx <- NULL; rv$cy <- NULL } })
     shiny::observeEvent(input$zoom_reset, { rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL })
     shiny::observeEvent(input$img_dblclick, { rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL })
-    # clic droit maintenu : deplacement (pan) de la vue
+    # right button held down: panning the view
     shiny::observeEvent(input$pan, {
       if (is.null(rv$img) || rv$zoom <= 1) return()
       if (is.null(rv$cx)) rv$cx <- rv$w / 2
@@ -1299,7 +1542,7 @@ launch_fishmorph_digitizer <- function(
       rv$cy <- rv$cy - input$pan$dy * (rv$h / rv$zoom)
     })
 
-    # --- retourner la photo (transforme aussi les points deja poses) ---
+    # --- flip the photograph (transforms the points already placed too) ---
     shiny::observeEvent(input$flip_mode, {
       if (is.null(rv$arr)) return()
       oldm <- rv$flip; newm <- input$flip_mode
@@ -1312,22 +1555,22 @@ launch_fishmorph_digitizer <- function(
       rv$img <- make_disp()
       rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL
     }, ignoreInit = TRUE)
-    # retournement PUREMENT visuel : ne retourne que l'affichage de la photo,
-    # les landmarks (et donc l'enregistrement) restent inchanges. Persiste d'une
-    # espece a l'autre. Le repere des clics est celui des points, donc une
-    # correction faite ici reste coherente avec les points deja charges.
+    # PURELY visual flip: it only flips the display of the photograph, the
+    # landmarks (and hence the record) stay unchanged. Persists from one species
+    # to the next. The frame of the clicks is that of the points, so a correction
+    # made here stays coherent with the points already loaded.
     shiny::observeEvent(input$flip_disp, {
       if (is.null(rv$arr)) return()
       rv$dispflip <- input$flip_disp
       rv$img <- make_disp()
     }, ignoreInit = TRUE)
-    # bascule affichage rapide (ne touche pas aux points)
+    # fast-display toggle (does not touch the points)
     shiny::observeEvent(input$fastdisp, { if (!is.null(rv$arr)) rv$img <- make_disp() },
                         ignoreInit = TRUE)
 
-    # barre de points au-dessus de la photo (vert = actif, bleu = pose, gris = derive)
+    # point bar above the photograph (green = active, blue = placed, grey = derived)
     output$lm_buttons <- shiny::renderUI({
-      # axe brise en tete de liste : 1, 22, 24, 2 ; puis anatomiques ; 25 a la FIN
+      # broken axis at the head of the list: 1, 22, 24, 2; then the anatomical
       anat <- setdiff(click_order(), c(1L, 22L, 24L, 2L, .FM_SCALE_PTS))
       order_show <- c(1L, 22L, 24L, 2L, anat, .FM_DERIVED, 25L,
                       if (is_new()) .FM_SCALE_PTS)
@@ -1338,27 +1581,43 @@ launch_fishmorph_digitizer <- function(
       btns <- lapply(order_show, function(i) {
         col <- if (i == rv$sel) "background:#28a745;color:#fff;font-weight:bold;"
                else if (i %in% rv$na) "background:#f8d7da;color:#a00;text-decoration:line-through;"
-               else if (i %in% .FM_SCALE_PTS) "background:#d9f2e6;color:#065;font-weight:bold;"  # barre d'echelle
-               else if (i %in% .FM_HINGES) "background:#ffd24d;color:#000;font-weight:bold;"  # charnieres 22/24/25
+               else if (i %in% .FM_SCALE_PTS) "background:#d9f2e6;color:#065;font-weight:bold;"  # scale bar
+               else if (i %in% .FM_HINGES) "background:#ffd24d;color:#000;font-weight:bold;"  # hinges 22/24/25
                else if (i %in% .FM_DERIVED) "background:#eee;color:#999;"
                else if (placed(i)) "background:#cfe8ff;"
                else "background:#f7f7f7;"
-        shiny::tags$button(type = "button", i,
+        shiny::tags$button(type = "button", i, class = "lmbtn",
           onclick = sprintf("Shiny.setInputValue('sel_btn', %d, {priority:'event'});", i),
-          style = paste0("margin:1px;padding:3px 8px;min-width:34px;border:1px solid #ccc;",
-                         "border-radius:3px;cursor:pointer;", col))
+          style = col)
       })
-      shiny::div(style = "margin-bottom:6px;line-height:2.2;",
-        shiny::tags$strong("Point actif (cliquez la photo pour le poser -> avance auto) : "),
-        btns,
-        shiny::tags$div(style = "font-size:11px;color:#666;",
-          "Vert = actif ; bleu = pose ; rose barre = NA ; gris = derive (auto) ;",
-          "jaune = CHARNIERES. Axe brise : 1 -> 22 -> 24 -> 2 (posez 22 puis 24 sur",
-          "les coudes). Tete sur 1-22, Bd + pectorale (10,11,12) sur 22-24, caudale",
-          "(16-17,18-19) sur 24-2. 25 (fin de liste) = courbure Bl entre 22 et 24,",
-          "sans convention. 24/25 ne sont PAS enregistrees (aides de saisie).",
-          if (is_new())
-            " Vert pale = BARRE D'ECHELLE 20/21 (optionnelle, en fin de liste)."))
+      # Nothing but the buttons, and all of them on ONE line: the bar is a map of
+      # the specimen, read at a glance dozens of times per fish, and the colour
+      # code is stated once at the foot of the page. A legend repeated above
+      # every specimen would only push the photograph further down.
+      shiny::div(class = "lmrow", btns)
+    })
+
+    # The colour code and the conventions, at the foot of the page: read once.
+    output$lm_legend <- shiny::renderUI({
+      shiny::tags$div(style = "font-size:11.5px;color:#6b7280;line-height:1.6;",
+        shiny::tags$b("Landmark bar: "),
+        "green = active; blue = placed; pink struck through = NA; grey = derived;",
+        "yellow = HINGES; pale green = scale bar 20/21 (mode",
+        "\"New photographs\" mode only, optional, at the end of the list).",
+        shiny::tags$br(),
+        shiny::tags$b("Broken axis: "), "1 -> 22 -> 24 -> 2 (place 22 then 24 on",
+        "the bends of a curved specimen). Head on 1-22, Bd and pectoral fin",
+        "(10, 11, 12) on 22-24, caudal (16-17, 18-19) on 24-2. 25, at the end of",
+        "the list, adds a fourth axis segment, with no convention.",
+        shiny::tags$br(),
+        shiny::tags$b("What is recorded: "),
+        "the 21 landmarks (1-19, 22, 23) AND the hinges 24 and 25, in their own",
+        "columns, plus 20/21 in \"New photographs\" mode. The hinges are not",
+        "landmarks and have no place in any shape analysis, but they define",
+        "the frames in which every convention was applied: without them,",
+        "a species",
+        "reopened for correction comes back with a straight axis and its",
+        "geometry silently stops matching the one it was digitized under.")
     })
 
     nav <- function(step) {
@@ -1369,50 +1628,62 @@ launch_fishmorph_digitizer <- function(
     shiny::observeEvent(input$prev,   nav(-1))
     shiny::observeEvent(input$skip,   nav(1))
 
-    # acces direct : le champ (recherche par nom) saute a l'espece choisie
+    # direct access: the field (search by name) jumps to the chosen species
     shiny::observeEvent(input$goto_species, {
       ni <- suppressWarnings(as.integer(input$goto_species))
       if (!is.na(ni) && ni >= 1 && ni <= length(qrows()) && ni != rv$qi)
         rv$qi <- ni
     }, ignoreInit = TRUE)
-    # garde le champ synchronise quand on navigue avec les boutons / enregistre
+    # keeps the field in sync when navigating with the buttons / saving
     shiny::observeEvent(rv$qi, {
       shiny::updateSelectizeInput(session, "goto_species", selected = rv$qi)
     }, ignoreInit = TRUE)
 
-    # --- enregistrement d'un NOUVEAU specimen dans `new_sheet` -----------------
-    # Cle de la ligne = photo_file (basename). Si la photo y figure deja, la ligne
-    # est REECRITE ; sinon une ligne est AJOUTEE a la fin. Retourne TRUE si ecrit.
+    # --- recording a NEW specimen into `new_sheet` -----------------------------
+    # Row key = photo_file (basename). If the photograph is already there, the
+    # row is REWRITTEN; otherwise a row is APPENDED. Returns TRUE if written.
     save_new <- function(P) {
       nm <- trimws(as.character(input$new_species %||% ""))
       if (!nzchar(nm)) {
-        shiny::showNotification("Renseignez le nom de l'espece avant d'enregistrer.",
+        shiny::showNotification("Fill in the species name before saving.",
                                 type = "error")
         return(FALSE)
       }
       f <- basename(cur_photo())
       if (is.na(f)) return(FALSE)
       r <- new_row_of(f)                           # lecture directe (cf. new_row_of)
-      if (is.na(r)) {                              # nouvelle ligne en fin de feuille
+      if (is.na(r)) {                              # new row at the end of the sheet
         r <- nrow(new_df) + 1L
         blank <- as.data.frame(matrix(NA_character_, nrow = 1, ncol = ncol(new_df)),
                                stringsAsFactors = FALSE)
         names(blank) <- names(new_df)
         new_df <<- rbind(new_df, blank)
       }
-      r_excel <- r + 1L                            # +1 pour l'entete
+      r_excel <- r + 1L                            # +1 for the header
       wr <- function(col, val) {
         j <- col_of_new(col); if (is.na(j)) return(invisible())
         openxlsx::writeData(wb, new_sheet, val, startCol = j, startRow = r_excel,
                             colNames = FALSE)
-        new_df[r, col] <<- as.character(val)       # new_df est tout-caractere
+        new_df[r, col] <<- as.character(val)       # new_df is all-character
       }
       wr("Genus.species", nm)
       wr("photo_file", f)
+      dropped <- integer(0)
       for (pnum in save_pts_new) {                 # 1..19, 20, 21, 22, 23, 24, 25
+        if (is.na(col_of_new(paste0(pnum, "_X"))) ||
+            is.na(col_of_new(paste0(pnum, "_Y")))) {
+          if (all(is.finite(P[pnum, ]))) dropped <- c(dropped, pnum)
+          next
+        }
         wr(paste0(pnum, "_X"), round(P[pnum, 1], 3))
         wr(paste0(pnum, "_Y"), round(P[pnum, 2], 3))
       }
+      if (length(dropped))
+        shiny::showNotification(
+          sprintf(paste("Columns absent from '%s': point(s) %s are NOT written",
+                        "to the workbook (the journal, however, has them)."),
+                  new_sheet, paste(dropped, collapse = ", ")),
+          type = "error", duration = NULL)
       mm <- num1(input$ruler_mm)
       wr("ruler_mm", if (is.finite(mm)) mm else NA)
       mpp <- mmpp_of(P)
@@ -1421,22 +1692,22 @@ launch_fishmorph_digitizer <- function(
       TRUE
     }
 
-    # --- statut de chaque point, pour le journal -------------------------------
-    # C'est l'information que le format large du classeur ne peut pas porter :
-    #   placed  : pose / deplace a la main, ou recharge d'une saisie anterieure
-    #   seeded  : ENCORE A SA POSITION DE GRAINE, donc jamais verifie -> a auditer
-    #   adjusted: recale par la convention des extremes (3/4), pas pointe
+    # --- status of each point, for the journal ---------------------------------
+    # This is the information the wide workbook layout cannot carry:
+    #   placed  : placed / moved by hand, or reloaded from an earlier entry
+    #   seeded  : STILL AT ITS SEED POSITION, hence never checked -> to be audited
+    #   adjusted: snapped by the extreme-point convention (3/4), not pointed at
     #   derived : calcule automatiquement (8, 9, 11, 15, 23)
     #   na      : declare non mesurable
     point_status <- function(points) {
       ov <- names(rv$override)
-      # rv$edited passe AVANT .FM_DERIVED : un point derive que tu as explicitement
-      # repositionne cette session n'est plus un point calcule, c'est une mesure.
+      # rv$edited comes BEFORE .FM_DERIVED: a derived point that you explicitly
+      # repositioned this session is no longer a computed point, it is a measurement.
       st <- vapply(points, function(p) {
         if (p %in% rv$na) "na"
-        # "adjusted" AVANT "placed" : un point recale par la convention des
-        # extremes n'a pas ete pointe par l'operateur, la distinction doit
-        # survivre dans le journal (controle qualite a posteriori).
+        # "adjusted" BEFORE "placed": a point snapped by the extreme-point
+        # convention was not pointed at by the operator, and the distinction must
+        # survive into the journal (quality control after the fact).
         else if (p %in% rv$adjusted) "adjusted"
         else if (p %in% rv$edited) "placed"
         else if (p %in% .FM_DERIVED) "derived"
@@ -1446,7 +1717,7 @@ launch_fishmorph_digitizer <- function(
       stats::setNames(st, as.character(points))
     }
 
-    # ecrit l'enregistrement courant dans le JOURNAL (avant tout xlsx)
+    # writes the current record to the JOURNAL (before any xlsx)
     journal_write <- function(P, row_key, points, species) {
       mm <- num1(input$ruler_mm); mpp <- mmpp_of(P)
       fm_journal_append(jr, row_key = row_key, coords = P, points = points,
@@ -1458,44 +1729,68 @@ launch_fishmorph_digitizer <- function(
         mm_per_px = if (is_new() && is.finite(mpp)) mpp else NA)
     }
 
-    # --- enregistrement ---------------------------------------------------------
-    # ORDRE IMPORTANT : le journal d'abord (ajout d'un bloc de lignes, immuable,
-    # instantane), le classeur ensuite et par lots. Si R s'arrete entre les deux,
-    # rien n'est perdu : fishmorph_consolidate(journal_dir) reconstruit la base.
-    # --- convention des extremes : verification a l'enregistrement --------------
-    # Le bouton "Enregistrer & suivant" ne declenche plus l'ecriture directement :
-    # il passe d'abord par ce controle. Si 3 n'est pas le point le plus dorsal (ou
-    # 4 le plus ventral), une fenetre propose de remesurer ou de corriger.
+    # --- saving -----------------------------------------------------------------
+    # ORDER MATTERS: the journal first (appending a block of lines, immutable,
+    # instantaneous), the workbook afterwards and in batches. If R stops between
+    # nothing is lost: fishmorph_consolidate(journal_dir) rebuilds the database.
+    # --- the conventions: checked on save ---------------------------------------
+    # The "Save & next" button no longer triggers the write directly: it goes
+    # through this check first. If 3 is not the most dorsal point (or 4 the most
+    # ventral), or if the eye vertical is out of order, a dialog offers to
+    # measure again or to correct.
     conv_msg <- function(v) {
       shiny::tags$ul(lapply(seq_len(nrow(v)), function(r) {
         i <- v$point[r]; j <- v$culprit[r]
-        shiny::tags$li(sprintf(
-          "Le point %d%s doit etre le plus %s : le point %d%s le depasse de %.0f px.",
+        shiny::tags$li(if (identical(v$kind[r], "extreme")) sprintf(
+          "Point %d%s must be the most %s: point %d%s overshoots it by %.0f px.",
           i, .fm_pt_label(i), if (i == 3L) "DORSAL" else "VENTRAL",
-          j, .fm_pt_label(j), v$delta[r]))
+          j, .fm_pt_label(j), v$delta[r])
+        else sprintf(
+          "Eye vertical out of order: point %d%s must sit ABOVE point %d%s, and is %.0f px below it.",
+          i, .fm_pt_label(i), j, .fm_pt_label(j), v$delta[r]))
       }))
     }
     show_conv_modal <- function(v) {
+      has_ext <- any(v$kind == "extreme")
+      has_ord <- any(v$kind == "order")
       shiny::showModal(shiny::modalDialog(
-        title = "Conventions FISHMORPH : Bd (3-4) n'est pas la profondeur maximale",
+        title = if (has_ext && has_ord)
+          "FISHMORPH conventions: Bd (3-4) and the eye vertical (5, 13, 7, 14, 6, 8)"
+        else if (has_ord)
+          "FISHMORPH conventions: the eye vertical (5, 13, 7, 14, 6, 8) is out of order"
+        else "FISHMORPH conventions: Bd (3-4) is not the maximum body depth",
         conv_msg(v),
         shiny::tags$p(shiny::tags$em(
-          "Hauteurs mesurees perpendiculairement a l'axe du corps. La caudale",
-          "(16-19), les extremites d'appendices (12, 15) et les points ventraux",
-          "derives (8, 9, 11) sont exclus du test.")),
-        shiny::tags$p("Corriger automatiquement donne au point sa hauteur, en",
-                      "gardant sa position le long de l'axe ; les points recales",
-                      "sont notes 'adjusted' dans le journal."),
+          "Heights measured perpendicular to the body axis. The caudal fin",
+          "(16-19), the appendage tips (12, 15) and the derived ventral points",
+          "(8, 9, 11) are excluded from the Bd test.")),
+        if (has_ord) shiny::tags$p(shiny::tags$em(
+          "The six points 5, 13, 7, 14, 6, 8 lie on one vertical, in that order",
+          "from the back downwards: top of the head, top of the eye, centre,",
+          "bottom of the eye, bottom of the head, body underside. An inversion",
+          "leaves each pair internally consistent -- Ed keeps its length -- while",
+          "Hd or Eh silently refers to the wrong point.")),
+        shiny::tags$p(
+          if (has_ext) shiny::tags$span(
+            "Correcting automatically gives point 3 or 4 the height of the point",
+            "overshooting it, keeping its position along the axis; the snapped",
+            "points are recorded as 'adjusted' in the journal.")
+          else NULL,
+          if (has_ord) shiny::tags$span(
+            shiny::tags$b(" An inversion is not corrected automatically:"),
+            "moving a point to satisfy the order would invent a measurement.",
+            "Measure the points again, or save as it is if the order is real.")
+          else NULL),
         footer = shiny::tagList(
-          shiny::actionButton("conv_remeasure", "Remesurer", class = "btn-primary"),
-          shiny::actionButton("conv_fix", "Corriger automatiquement et enregistrer"),
-          shiny::actionButton("conv_asis", "Enregistrer sans corriger")),
+          shiny::actionButton("conv_remeasure", "Measure again", class = "btn-primary"),
+          if (has_ext) shiny::actionButton("conv_fix", "Correct automatically and save"),
+          shiny::actionButton("conv_asis", "Save without correcting")),
         easyClose = FALSE, size = "l"))
     }
-    # applique la correction, en repassant par recon() : les conventions d'edition
-    # contrainte peuvent redeplacer des points (ligne du ventre notamment), donc on
-    # itere jusqu'a stabilite -- 3 passes suffisent largement, la garde evite une
-    # boucle infinie sur un cas pathologique.
+    # applies the correction, going back through recon(): the constrained-editing
+    # conventions may move points again (the belly line in particular), so we
+    # iterate to stability -- 3 passes are ample, and the bound rules out an
+    # infinite loop on a pathological case.
     apply_conv_fix <- function() {
       for (it in 1:3) {
         P <- recon()
@@ -1517,39 +1812,53 @@ launch_fishmorph_digitizer <- function(
     shiny::observeEvent(input$save, {
       shiny::req(rv$A, rv$B)
       if (isTRUE(input$checkextremes)) {
-        v <- .fm_extreme_violations(recon())
+        v <- .fm_convention_violations(recon())
         if (!is.null(v)) { show_conv_modal(v); return() }
       }
       do_save()
     })
 
-    # 1) remesurer : on ferme, on selectionne le point fautif et on y zoome
+    # 1) measure again: close, select the offending point and zoom onto it. For
+    #    an inversion the point to re-measure is the CULPRIT -- the one found on
+    #    the wrong side -- not the reference it was compared with.
     shiny::observeEvent(input$conv_remeasure, {
       shiny::removeModal()
-      v <- .fm_extreme_violations(recon())
-      if (!is.null(v)) { rv$sel <- v$point[1]; zoom_to_sel() }
+      v <- .fm_convention_violations(recon())
+      if (!is.null(v)) {
+        rv$sel <- if (identical(v$kind[1], "order")) v$culprit[1] else v$point[1]
+        zoom_to_sel()
+      }
     })
-    # 2) corriger automatiquement puis enregistrer
+    # 2) correct automatically then save. Only the extremes are corrected; an
+    #    inversion of the eye vertical is reported again on the way out, because
+    #    saving it silently would hide the one error the check exists for.
     shiny::observeEvent(input$conv_fix, {
       shiny::removeModal()
       ok <- apply_conv_fix()
       if (!isTRUE(ok))
         shiny::showNotification(
-          "Convention 3/4 toujours non respectee apres correction : verifiez la saisie.",
+          "Convention 3/4 still breached after correction: check the placement.",
           type = "warning", duration = 8)
+      ord <- .fm_eye_order_violations(recon())
+      if (!is.null(ord))
+        shiny::showNotification(
+          sprintf(paste("Eye vertical still out of order (%s): not corrected",
+                        "automatically, saved as it is."),
+                  paste(sprintf("%d/%d", ord$point, ord$culprit), collapse = ", ")),
+          type = "warning", duration = 10)
       do_save()
     })
-    # 3) enregistrer tel quel (l'ecart est reel et assume)
+    # 3) save as it is (the discrepancy is real and assumed)
     shiny::observeEvent(input$conv_asis, { shiny::removeModal(); do_save() })
 
     do_save <- function() {
       shiny::req(rv$A, rv$B)
       P <- recon()
-      if (is_new()) {                              # nouveaux specimens : autre feuille
+      if (is_new()) {                              # new specimens: another sheet
         nm <- trimws(as.character(input$new_species %||% ""))
         f  <- basename(cur_photo())
         if (!nzchar(nm) || is.na(f)) {
-          shiny::showNotification("Renseignez le nom de l'espece avant d'enregistrer.",
+          shiny::showNotification("Fill in the species name before saving.",
                                   type = "error")
           return()
         }
@@ -1566,17 +1875,32 @@ launch_fishmorph_digitizer <- function(
       }
       journal_write(P, row_key = as.character(cur_name()), points = save_pts,
                     species = as.character(cur_name()))
-      r_excel <- cur_row() + 1L                    # +1 pour l'entete
+      r_excel <- cur_row() + 1L                    # +1 for the header
+      # A missing column loses the point: ensure_cols() creates them all at
+      # start-up (22/23 already exist, 24/25 are added), so this case should
+      # never arise -- but if it does (a sheet replaced by hand), the point must
+      # disappear LOUDLY and not in silence.
+      dropped <- integer(0)
       for (pnum in save_pts) {                     # 1..19, 22, 23, 24, 25
         cx <- col_of(paste0(pnum, "_X")); cy <- col_of(paste0(pnum, "_Y"))
-        if (is.na(cx) || is.na(cy)) next        # colonne absente de la feuille -> ignore
+        if (is.na(cx) || is.na(cy)) {
+          if (all(is.finite(P[pnum, ]))) dropped <- c(dropped, pnum)
+          next
+        }
         openxlsx::writeData(wb, lm_sheet, round(P[pnum, 1], 3),
                             startCol = cx, startRow = r_excel, colNames = FALSE)
         openxlsx::writeData(wb, lm_sheet, round(P[pnum, 2], 3),
                             startCol = cy, startRow = r_excel, colNames = FALSE)
       }
-      # met a jour lm_df EN MEMOIRE pour que revenir sur l'espece dans la meme
-      # session recharge bien ce qu'on vient d'enregistrer (24/25 compris).
+      if (length(dropped))
+        shiny::showNotification(
+          sprintf(paste("Columns absent from '%s': point(s) %s are NOT written",
+                        "to the workbook. They are in the journal;",
+                        "fishmorph_consolidate() will find them again."),
+                  lm_sheet, paste(dropped, collapse = ", ")),
+          type = "error", duration = NULL)
+      # updates lm_df IN MEMORY so that coming back to the species within the
+      # session reloads exactly what has just been saved (24/25 included).
       rr <- cur_row()
       for (pnum in save_pts) {
         xc <- paste0(pnum, "_X"); yc <- paste0(pnum, "_Y")
@@ -1590,31 +1914,31 @@ launch_fishmorph_digitizer <- function(
       nav(1)
     }
 
-    # ecriture manuelle du classeur (le journal, lui, est deja a jour)
+    # manual write of the workbook (the journal is already up to date)
     shiny::observeEvent(input$flush, {
       if (pending == 0L) {
-        shiny::showNotification("Classeur deja a jour.", type = "message"); return()
+        shiny::showNotification("Workbook already up to date.", type = "message"); return()
       }
       n <- pending
       if (isTRUE(flush_xlsx(force = TRUE)))
-        shiny::showNotification(sprintf("Classeur ecrit (%d enregistrement(s)).", n),
+        shiny::showNotification(sprintf("Workbook written (%d record(s)).", n),
                                 type = "message")
       else
-        shiny::showNotification("Echec de l'ecriture : donnees conservees dans le journal.",
+        shiny::showNotification("Write failed: the data is kept in the journal.",
                                 type = "error")
       rv$flushstamp <- rv$flushstamp + 1L
     })
 
-    # fin de session (fermeture de l'onglet / arret de l'app) : dernier flush.
-    # Filet de securite seulement -- si R est tue brutalement il ne s'execute pas,
-    # et c'est precisement pour ce cas que le journal existe.
+    # end of session (tab closed / app stopped): a last flush. A safety net only
+    # -- if R is killed outright it does not run, and it is precisely for that
+    # case that the journal exists.
     session$onSessionEnded(function() {
       try(flush_xlsx(force = TRUE), silent = TRUE)
     })
 
     output$plot <- shiny::renderPlot({
       if (is.null(rv$img)) { graphics::plot.new()
-        graphics::text(.5, .5, "Photo indisponible pour cette espece."); return() }
+        graphics::text(.5, .5, "No photograph available for this species."); return() }
       op <- graphics::par(mar = c(0,0,0,0)); on.exit(graphics::par(op))
       cx <- if (is.null(rv$cx)) rv$w / 2 else rv$cx
       cy <- if (is.null(rv$cy)) rv$h / 2 else rv$cy
@@ -1627,17 +1951,17 @@ launch_fishmorph_digitizer <- function(
       if (!is.null(rv$B)) graphics::points(rv$B[1], rv$B[2], pch = 3, col = "orange", lwd = 3, cex = 2)
       if (!is.null(rv$A) && !is.null(rv$B)) {
         P <- recon()
-        # lignes de repere (contour du corps, ventre, verticale de l'oeil, oeil)
+        # reference lines (body outline, belly, vertical of the eye, eye)
         if (isTRUE(input$showlines)) {
           path <- function(pts, ...) { pts <- pts[is.finite(P[pts, 1])]
             if (length(pts) > 1) graphics::lines(P[pts, 1], P[pts, 2], ...) }
           path(c(1, 5, 3, 16, 18, 19, 17, 4, 6, 1), col = "grey30", lwd = 1)      # contour
-          path(c(9, 8, 11, 4), col = "grey85", lty = 3, lwd = 1)                  # ventre
-          if (all(is.finite(P[c(1, 9), ]))) path(c(1, 9), col = "grey60", lwd = 1) # droite museau (1-9)
+          path(c(9, 8, 11, 4), col = "grey85", lty = 3, lwd = 1)                  # belly
+          if (all(is.finite(P[c(1, 9), ]))) path(c(1, 9), col = "grey60", lwd = 1) # snout line (1-9)
           if (all(is.finite(P[c(6, 23), ])))                                       # segment 23-6 (// axe)
             graphics::segments(P[23,1], P[23,2], P[6,1], P[6,2], col = "magenta", lwd = 1.5)
-          path(c(5, 13, 7, 14, 6, 8), col = "grey85", lty = 3, lwd = 1)           # verticale oeil
-          if (all(is.finite(P[c(7, 13, 14), ]))) {                               # oeil (cercle)
+          path(c(5, 13, 7, 14, 6, 8), col = "grey85", lty = 3, lwd = 1)           # vertical of the eye
+          if (all(is.finite(P[c(7, 13, 14), ]))) {                               # eye (circle)
             er <- sqrt(sum((P[13, ] - P[14, ])^2)) / 2; th <- seq(0, 2*pi, length.out = 60)
             graphics::lines(P[7,1] + er*cos(th), P[7,2] + er*sin(th), col = "grey85", lty = 3, lwd = 1)
           }
@@ -1645,27 +1969,27 @@ launch_fishmorph_digitizer <- function(
         pairs <- lapply(.FM_PAIR_SEG, `[[`, "pair")
         cols <- grDevices::hcl.colors(length(pairs), "Dark3")
         for (k in seq_along(pairs)) { ab <- pairs[[k]]
-          # Bl : trace le long de l'axe BRISE 1 -> charnieres posees -> 2
+          # Bl: drawn along the BROKEN axis 1 -> hinges placed -> 2
           if (names(pairs)[k] == "Bl") {
             ch <- .fm_axis_chain(P)
             graphics::lines(P[ch, 1], P[ch, 2], col = cols[k], lwd = 2)
           } else
             graphics::segments(P[ab[1],1],P[ab[1],2],P[ab[2],1],P[ab[2],2], col = cols[k], lwd = 2) }
-        # barre d'echelle 20-21 (mode "new") : tracee en vert, hors du corps
+        # scale bar 20-21 ("new" mode): drawn in green, outside the body
         if (is_new() && all(is.finite(P[.FM_SCALE_PTS, ])))
           graphics::segments(P[20,1], P[20,2], P[21,1], P[21,2],
                              col = "#00a06a", lwd = 3)
         lp <- lm_pts()
         graphics::points(P[lp,1], P[lp,2], pch = 21, bg = "white", cex = 1.2)
         graphics::text(P[lp,1], P[lp,2], lp, pos = 3, cex = .7, col = "yellow")
-        # charnieres supplementaires (24,25) posees : dessinees en or
+        # extra hinges (24, 25) placed: drawn in gold
         xh <- setdiff(.FM_HINGES, lp)
         xh <- xh[vapply(xh, function(i) i <= nrow(P) && all(is.finite(P[i, ])), logical(1))]
         if (length(xh)) {
           graphics::points(P[xh,1], P[xh,2], pch = 21, bg = "gold", cex = 1.3)
           graphics::text(P[xh,1], P[xh,2], xh, pos = 3, cex = .7, col = "orange")
         }
-        # point actif en rouge (landmarks OU charnieres)
+        # active point in red (landmarks OR hinges)
         if (rv$sel %in% c(lp, .FM_HINGES) && rv$sel <= nrow(P) &&
             all(is.finite(P[rv$sel, ])))
           graphics::points(P[rv$sel,1], P[rv$sel,2], pch = 21, bg = "red", cex = 1.7, lwd = 2)
@@ -1673,21 +1997,21 @@ launch_fishmorph_digitizer <- function(
       }
     })
 
-    # libelle de la photo courante + statut d'enregistrement (mode "new")
+    # label of the current photograph + record status ("new" mode)
     output$new_photo_lab <- shiny::renderUI({
       if (!is_new()) return(NULL)
       f <- basename(cur_photo())
       already <- !is.na(cur_new_row())
       shiny::HTML(sprintf("Photo : <code>%s</code><br>%s",
         if (is.na(f)) "-" else f,
-        if (already) "<span style='color:#0a0'>deja dans la feuille (sera reecrite)</span>"
-        else "<span style='color:#666'>nouvelle ligne a l'enregistrement</span>"))
+        if (already) "<span style='color:#0a0'>already in the sheet (will be rewritten)</span>"
+        else "<span style='color:#666'>new row on saving</span>"))
     })
 
     output$rt <- shiny::renderTable({
       shiny::req(rv$A, rv$B); P <- recon(); seg <- cur_seg()
-      # Bl = longueur le long de l'axe BRISE 1->...->2 (curviligne, toutes les
-      # charnieres posees) ; l'echelle px/unite en decoule et convertit les autres.
+      # Bl = length along the BROKEN axis 1->...->2 (curvilinear, every hinge
+      # placed); the px/unit scale follows from it and converts the others.
       Blpx <- .fm_axis_len_px(P)
       ppu  <- Blpx / seg$Bl
       dd <- function(nm, a, b) {
@@ -1701,9 +2025,9 @@ launch_fishmorph_digitizer <- function(
       if (!is_new())
         return(data.frame(segment = names(.FM_PAIR_SEG), cible = cible,
                           reconstruit = rec, row.names = NULL))
-      # mode "new" : pas de cible mesuree. `cible` vaut la MEDIANE FISHMORPH du
-      # rapport segment/Bl et `mesure` le rapport effectivement digitalise ; la
-      # colonne mm n'apparait que si la barre d'echelle 20-21 est posee.
+      # "new" mode: no measured target. `target` is the FISHMORPH MEDIAN of the
+      # segment/Bl ratio and `measured` the ratio actually digitized; the mm
+      # column only appears when the scale bar 20-21 is placed.
       out <- data.frame(segment = names(.FM_PAIR_SEG),
                         mediane_ratio = cible, ratio_mesure = rec, row.names = NULL)
       mpp <- mmpp_of(P)
@@ -1713,64 +2037,88 @@ launch_fishmorph_digitizer <- function(
 
     output$progress <- shiny::renderUI({
       modelab <- switch(rv$mode,
-        correct = "CORRIGER (deja landmarkes)",
-        new     = "NOUVELLES PHOTOS (ajout au classeur)",
-        "RECONSTRUIRE (sans landmarks)")
+        correct = "CORRECT (already landmarked)",
+        new     = "NEW PHOTOGRAPHS (appended to the workbook)",
+        "RECONSTRUCT (without landmarks)")
       Bl <- cur_seg()$Bl
       scal <- "-"
       if (!is.null(rv$A) && !is.null(rv$B) && is.finite(Bl)) {
         P <- try(recon(), silent = TRUE)
         blpx <- if (!inherits(P, "try-error")) .fm_axis_len_px(P)
                 else sqrt(sum((rv$B - rv$A)^2))
-        # en mode "new" Bl = 1 (pseudo-segment) : px/unite = longueur du corps en
-        # pixels, donc on affiche plutot mm/px (barre 20-21) et Bl en mm si connu.
+        # in "new" mode Bl = 1 (a pseudo-segment): px/unit = the body length in
+        # pixels, so mm/px (the bar 20-21) is shown instead, and Bl in mm if known.
         scal <- if (is_new()) {
           mpp <- if (inherits(P, "try-error")) NA_real_ else mmpp_of(P)
           if (is.finite(mpp)) sprintf("%.4f mm/px (Bl = %.1f mm)", mpp, blpx * mpp)
-          else "barre 20-21 non posee"
-        } else sprintf("%.2f px/unite", blpx / Bl)    # echelle sur l'axe brise
+          else "bar 20-21 not placed"
+        } else sprintf("%.2f px/unit", blpx / Bl)    # scale on the broken axis
       }
-      # etat du tampon xlsx : rv$saved / rv$flushstamp servent de declencheurs
-      # reactifs (`pending` est une simple variable, non reactive).
+      # state of the xlsx buffer: rv$saved / rv$flushstamp act as reactive
+      # triggers (`pending` is a plain variable, not reactive).
       rv$flushstamp
-      buf <- if (pending == 0L) "classeur a jour"
+      buf <- if (pending == 0L) "workbook up to date"
              else sprintf("<span style='color:#b36b00'>%d en attente d'ecriture</span>",
                           pending)
-      shiny::HTML(sprintf(
+      shiny::div(class = "progressbox", shiny::HTML(sprintf(
         paste0("Mode : <b>%s</b><br><b>%s</b><br>%s %d / %d<br>Enregistrees : %d",
                "<br>Echelle : %s<br>Journal : <b>OK</b> (%s)"),
         modelab, cur_name(), if (is_new()) "Photo" else "Espece",
-        rv$qi, length(qrows()), length(rv$saved), scal, buf))
+        rv$qi, length(qrows()), length(rv$saved), scal, buf)))
+    })
+
+    # What the session IS, on one line. These paths are arguments of
+    # launch_fishmorph_digitizer(): they are displayed, they are not edited.
+    output$session_info <- shiny::renderUI({
+      shiny::HTML(sprintf(
+        paste("Classeur <code>%s</code> &nbsp;&middot;&nbsp;",
+              "photos <code>%s</code> &nbsp;&middot;&nbsp;",
+              "journal <code>%s</code> &nbsp;&middot;&nbsp;",
+              "operateur <code>%s</code>"),
+        basename(out_path), basename(photo_dir), basename(jr$path), jr$operator))
+    })
+
+    # State of the two writing layers, in the "Checks" tab.
+    output$io_info <- shiny::renderUI({
+      rv$flushstamp; rv$saved                      # declencheurs reactifs
+      shiny::div(class = "progressbox", shiny::HTML(sprintf(
+        paste("Classeur : <code>%s</code><br>%s<br>",
+              "Journal: <code>%s</code><br>written at every record"),
+        out_path,
+        if (pending == 0L) "a jour"
+        else sprintf("<b style='color:#b36b00'>%d record(s) pending</b>",
+                     pending),
+        jr$path)))
     })
 
     output$status <- shiny::renderText({
       if (is.null(rv$img))
-        return(if (!length(qrows())) "Aucune espece dans ce mode." else "Photo indisponible.")
+        return(if (!length(qrows())) "No species in this mode." else "Photograph unavailable.")
       lab <- if (rv$sel == 1L) "MUSEAU (LM1)" else if (rv$sel == 2L) "BASE CAUDALE (LM2)"
              else if (rv$sel == 20L) "BARRE D'ECHELLE, debut (LM20)"
              else if (rv$sel == 21L) "BARRE D'ECHELLE, fin (LM21)"
              else paste0("LM", rv$sel)
       intro <- if (rv$mode == "correct")
-        paste0("Mode CORRECTION : les 21 landmarks sont recharges du classeur. ",
-               "Selectionnez un point (bouton ou clic sur la photo) puis cliquez sa ",
-               "nouvelle position ; 'Enregistrer & suivant' reecrit la ligne du classeur.\n")
+        paste0("CORRECTION mode: the 21 landmarks are reloaded from the workbook. ",
+               "Select a point (a button, or a click on the photograph) then click ",
+               "its new position; 'Save & next' rewrites the workbook row.\n")
       else if (rv$mode == "new")
-        paste0("Mode NOUVELLES PHOTOS : cette photo n'est pas dans le classeur. ",
-               "Aucun segment mesure n'existe -> apres les clics 1 (museau) et 2 ",
-               "(base caudale), les points sont pre-places aux PROPORTIONS MEDIANES ",
-               "FISHMORPH, a corriger un par un. Verifiez le nom d'espece (panneau ",
-               "de gauche) ; 20/21 = barre d'echelle, optionnelle. ",
-               "'Enregistrer & suivant' ajoute une ligne a la feuille '", new_sheet, "'.\n")
+        paste0("NEW PHOTOGRAPHS mode: this photograph is not in the workbook. ",
+               "No measured segment exists -> after the clicks on 1 (snout) and 2 ",
+               "(caudal base), the points are pre-placed at the FISHMORPH MEDIAN ",
+               "PROPORTIONS, to be corrected one by one. Check the species name ",
+               "(left panel); 20/21 = scale bar, optional. ",
+               "'Save & next' appends a row to the sheet '", new_sheet, "'.\n")
       else ""
       paste0(intro, "Point actif : ", lab,
-             " -> cliquez sa position sur la photo (avance auto).\n",
+             " -> click its position on the photograph (auto-advance).\n",
              if (is.null(rv$A) || is.null(rv$B))
-               "Posez d'abord museau (1) puis base caudale (2)."
-             # NB : il n'y a PAS de zoom a la molette (aucun handler wheel n'est
-             # pose) ; le zoom passe par les boutons +/- du panneau de gauche.
-             else paste0("Zoom : boutons + / - (se centre sur le point actif) ; ",
-                         "clic droit maintenu = deplacer la vue ; ",
-                         "double-clic = vue entiere."))
+               "Place the snout (1) first, then the caudal base (2)."
+             # NB: there is NO wheel zoom (no wheel handler is installed); the
+             # zoom goes through the +/- buttons of the left panel.
+             else paste0("Zoom: + / - buttons (centred on the active point); ",
+                         "right-click and drag to pan; ",
+                         "double-click for the whole view."))
     })
   }
 
@@ -1782,44 +2130,44 @@ launch_fishmorph_digitizer <- function(
 # -----------------------------------------------------------------------------
 # library(Rfishmorph)
 #
-# # (0) SECURITE DES DONNEES. Chaque enregistrement part d'abord dans un journal
-# #     append-only (dossier `journal_dir`, un fichier TSV par session, jamais
-# #     reecrit) ; le classeur n'est plus qu'un export, ecrit atomiquement et par
-# #     lots de `xlsx_flush_every`. Si R plante, rien n'est perdu :
+# # (0) DATA SAFETY. Every record goes first to an append-only journal (the
+# #     `journal_dir` folder, one TSV file per session, never rewritten); the
+# #     workbook is now only an export, written atomically and in batches of
+# #     `xlsx_flush_every`. If R crashes, nothing is lost:
 # #        base <- fishmorph_consolidate("FishMORPH/landmark_journal",
 # #                                      out_csv = "FishMORPH/landmarks.csv")
 # #        qc   <- fishmorph_journal_qc("FishMORPH/landmark_journal")
-# #     `qc` liste notamment les points restes a leur position de GRAINE, donc
-# #     jamais verifies a l'oeil -- information absente du classeur.
+# #     `qc` lists in particular the points left at their SEED position, hence
+# #     never checked by eye -- information absent from the workbook.
 #
-# # (1) digitaliser les especes SANS landmarks (comportement historique) :
+# # (1) digitize the species WITHOUT landmarks (the historical behaviour):
 # launch_fishmorph_digitizer(
 #   xlsx_path = "FishMORPH/FISHMORPH_PUBLI_9556sp.xlsx",
 #   photo_dir = "FishMORPH/Photos utilisées"
 # )
 #
-# # (2) relire / corriger les especes DEJA landmarkees :
+# # (2) review / correct the species ALREADY landmarked:
 # launch_fishmorph_digitizer(
 #   xlsx_path = "FishMORPH/FISHMORPH_PUBLI_9556sp.xlsx",
 #   photo_dir = "FishMORPH/Photos utilisées",
 #   mode      = "correct"
 # )
 #
-# # (3) AJOUTER de nouvelles photos (specimens absents du classeur) :
+# # (3) ADD new photographs (specimens absent from the workbook):
 # launch_fishmorph_digitizer(
 #   xlsx_path     = "FishMORPH/FISHMORPH_PUBLI_9556sp.xlsx",
 #   photo_dir     = "FishMORPH/Photos utilisées",
-#   new_photo_dir = "FishMORPH/Photos nouvelles",   # <- dossier a digitaliser
-#   new_sheet     = "new_specimens",                # <- feuille d'arrivee
-#   ruler_mm      = 10,                             # <- longueur de la regle 20-21
+#   new_photo_dir = "FishMORPH/Photos nouvelles",   # <- folder to digitize
+#   new_sheet     = "new_specimens",                # <- destination sheet
+#   ruler_mm      = 10,                             # <- length of the ruler 20-21
 #   mode          = "new"
 # )
-# Deposez les photos dans `new_photo_dir` AVANT de lancer l'app : chaque image du
-# dossier devient une entree de la file (plusieurs specimens d'une meme espece
-# sont donc possibles, une ligne chacun). Le nom d'espece est pre-rempli depuis le
-# nom de fichier et modifiable dans le panneau de gauche. La cle d'une ligne est
-# la colonne `photo_file` : revenir sur une photo deja faite recharge ses points
-# et REECRIT la meme ligne au lieu d'en ajouter une seconde.
+# Drop the photographs into `new_photo_dir` BEFORE launching the app: every
+# image in the folder becomes an entry of the queue (several specimens of one
+# species are therefore possible, one row each). The species name is pre-filled
+# from the file name and can be changed in the left panel. The key of a row is
+# the `photo_file` column: coming back to a photograph already done reloads its
+# points and REWRITES the same row instead of appending a second one.
 #
-# Le bouton "Mode" en haut de l'app bascule entre les trois files a la volee.
-# -> ecrit dans FishMORPH/FISHMORPH_PUBLI_9556sp_reconstructed.xlsx
+# The "Queue" selector at the top of the app switches between the three queues.
+# -> writes into FishMORPH/FISHMORPH_PUBLI_9556sp_reconstructed.xlsx

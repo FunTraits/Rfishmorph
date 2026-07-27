@@ -2,12 +2,12 @@
 % Please edit documentation in R/database.R
 \name{fishmorph_db_connect}
 \alias{fishmorph_db_connect}
-\title{Ouvre la base (en lecture seule par defaut)}
+\title{Open the database (read-only by default)}
 \usage{
 fishmorph_db_connect(db_path, read_only = TRUE)
 }
 \description{
-La lecture seule est le mode normal : la base est derivee, on ne doit jamais y
-ecrire a la main. Elle permet aussi a plusieurs processus R d'ouvrir le meme
-fichier simultanement.
+Read-only is the normal mode: the database is derived, and must never be
+written to by hand. It also lets several R processes open the same file
+simultaneously.
 }

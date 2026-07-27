@@ -2,7 +2,7 @@
 % Please edit documentation in R/digitizer-app.R
 \name{launch_fishmorph_digitizer}
 \alias{launch_fishmorph_digitizer}
-\title{Outil interactif de digitalisation des landmarks FISHMORPH}
+\title{Interactive tool for digitizing the FISHMORPH landmarks}
 \usage{
 launch_fishmorph_digitizer(
   xlsx_path,
@@ -20,90 +20,104 @@ launch_fishmorph_digitizer(
 )
 }
 \arguments{
-\item{xlsx_path}{Chemin du classeur maitre (2 feuilles).}
+\item{xlsx_path}{Path of the master workbook (2 sheets).}
 
-\item{photo_dir}{Dossier des photos (reste en local).}
+\item{photo_dir}{Photograph folder (stays local).}
 
-\item{out_path}{Chemin de la copie de sortie. NULL -> "\if{html}{\out{<maitre>}}_reconstructed.xlsx"
-dans le meme dossier. La copie est creee si absente ; sinon la reprise se
-fait dessus (les especes deja enregistrees sont exclues de la file).}
+\item{out_path}{Path of the output copy. NULL -> "\if{html}{\out{<master>}}_reconstructed.xlsx"
+in the same folder. The copy is created if absent; otherwise work resumes
+on it (species already recorded are excluded from the queue).}
 
-\item{seg_sheet, lm_sheet}{Noms des feuilles.}
+\item{seg_sheet, lm_sheet}{Sheet names.}
 
-\item{new_sheet}{Feuille ou sont ajoutes les NOUVEAUX specimens (mode "new").
-Creee (avec les entetes de \code{lm_sheet}) si elle n'existe pas.}
+\item{new_sheet}{Sheet the NEW specimens are appended to ("new" mode).
+Created (with the headers of \code{lm_sheet}) if it does not exist.}
 
-\item{new_photo_dir}{Dossier des photos de nouveaux specimens (mode "new").
-Toutes les images du dossier forment la file. Peut ne pas exister : le mode
-"new" est alors simplement indisponible.}
+\item{new_photo_dir}{Folder of the new specimens' photographs ("new" mode).
+Every image in the folder forms the queue. It may not exist: the "new"
+mode is then simply unavailable.}
 
-\item{ruler_mm}{Longueur reelle (mm) de la barre d'echelle digitalisee par les
-points 20 et 21 en mode "new". Modifiable dans l'app, specimen par specimen.}
+\item{ruler_mm}{Real length (mm) of the scale bar digitized by points 20 and
+21 in "new" mode. Can be changed in the app, specimen by specimen.}
 
-\item{journal_dir}{Dossier du JOURNAL append-only (voir \code{\link[=fm_journal_open]{fm_journal_open()}}).
-Chaque enregistrement y est ajoute AVANT toute ecriture du classeur : c'est
-la source de verite, et elle survit a un crash.
-\code{\link[=fishmorph_consolidate]{fishmorph_consolidate()}} reconstruit la base a tout moment.}
+\item{journal_dir}{Folder of the append-only JOURNAL (see \code{\link[=fm_journal_open]{fm_journal_open()}}).
+Every record is appended to it BEFORE any workbook write: it is the source
+of truth, and it survives a crash.
+\code{\link[=fishmorph_consolidate]{fishmorph_consolidate()}} rebuilds the database at any time.}
 
-\item{operator}{Identifiant de l'operateur, trace dans le journal et dans le
-nom du fichier de session. NULL -> utilisateur systeme.}
+\item{operator}{Operator identifier, traced in the journal and in the session
+file name. NULL -> the system user.}
 
-\item{xlsx_flush_every}{Nombre d'enregistrements entre deux ecritures du
-classeur. Le classeur pese plusieurs Mo et est REECRIT INTEGRALEMENT a chaque
-fois : le sortir de la boucle de saisie evite autant le risque que l'attente.
-Les modifications non ecrites restent en memoire (donc relisibles dans la
-session), sont ecrites en fin de session, par le bouton dedie, et sont de
-toute facon dans le journal. 1 = comportement historique (a chaque specimen).}
+\item{xlsx_flush_every}{Number of records between two writes of the
+workbook. The workbook weighs several Mb and is REWRITTEN IN FULL every
+time: taking it out of the digitizing loop removes both the risk and the
+wait. Unwritten changes stay in memory (and are therefore readable within
+the session), are written at the end of the session, by the dedicated
+button, and are in the journal in any case. 1 = the historical behaviour}
 
-\item{mode}{File de depart : "reconstruct" (especes SANS landmarks, a
-digitaliser depuis les segments), "correct" (especes DEJA landmarkees, a
-relire/corriger : les 21 points sont recharges du classeur) ou "new"
-(photos nouvelles de \code{new_photo_dir}, ajoutees a \code{new_sheet}). Commutable a
-tout moment via le bouton "Mode" dans l'app. Si la file demandee est vide,
-l'app demarre sur une autre.}
+\item{mode}{Starting queue: "reconstruct" (species WITHOUT landmarks, to be
+digitized from the segments), "correct" (species ALREADY landmarked, to be
+reviewed/corrected: the 21 points are reloaded from the workbook) or
+"new" (new photographs from \code{new_photo_dir}, appended to \code{new_sheet}).
+Switchable at any moment through the "Queue" selector in the app. If the
+requested queue is empty, the app starts on another one.}
 }
 \value{
-Invisiblement \code{NULL} ; appelee pour son effet de bord (lance l'app).
+Invisibly \code{NULL}; called for its side effect (it launches the app).
 }
 \description{
-Ouvre une application 'shiny' qui place les 21 landmarks FISHMORPH sur des
-photographies de specimens, selon trois files de travail commutables a la
-volee (voir \code{mode}). Chaque enregistrement part d'abord dans un journal
-append-only (\code{\link[=fm_journal_open]{fm_journal_open()}}), puis dans le classeur ; en cas d'arret
-brutal, \code{\link[=fishmorph_consolidate]{fishmorph_consolidate()}} retrouve tout le travail.
+Opens a 'shiny' application that places the 21 FISHMORPH landmarks on
+specimen photographs, along three working queues that can be switched on the
+fly (see \code{mode}). Every record goes first to an append-only journal
+(\code{\link[=fm_journal_open]{fm_journal_open()}}), then to the workbook; after a brutal interruption,
+\code{\link[=fishmorph_consolidate]{fishmorph_consolidate()}} recovers all the work.
 }
 \details{
-Les photographies restent EN LOCAL : elles ne sont jamais copiees dans le
-package ni dans le classeur, seuls leur nom de fichier et leurs dimensions en
-pixels sont enregistres. C'est \code{photo_dir} et \code{new_photo_dir} qui font le lien.
+The photographs stay LOCAL: they are never copied into the package nor into
+the workbook, only their file name and their size in pixels are recorded. It
+is \code{photo_dir} and \code{new_photo_dir} that make the link.
 }
-\section{Controle des extremes a l'enregistrement}{
+\section{Extreme-point check on save}{
 
-FISHMORPH definit \code{Bd} comme la profondeur MAXIMALE du corps : le point 3 doit
-donc etre le plus dorsal et le point 4 le plus ventral. Quand la case
-\emph{"Verifier 3/4 (extremes)"} est cochee (defaut), "Enregistrer & suivant"
-controle cette convention avant toute ecriture et, si elle est violee, propose
-de \strong{remesurer} (le point fautif devient actif et la vue s'y centre), de
-\strong{corriger automatiquement} (3, resp. 4, prend la hauteur du point qui le
-depasse, en gardant sa position le long de l'axe : \code{Bd} augmente, la
-perpendicularite 3-4 est preservee) ou d'\strong{enregistrer sans corriger}.
+FISHMORPH defines \code{Bd} as the MAXIMUM body depth: point 3 must therefore be
+the most dorsal and point 4 the most ventral. When the box
+\emph{"Check 3/4 (extremes)"} is ticked (the default), "Save & next"
+checks that convention before anything is written and, if it is breached,
+offers to \strong{measure again} (the offending point becomes active and the view
+centres on it), to \strong{correct automatically} (3, resp. 4, takes the height of
+the point overshooting it, keeping its position along the axis: \code{Bd} grows,
+the 3-4 perpendicularity is preserved) or to \strong{save without correcting}.
 
-Les hauteurs sont mesurees perpendiculairement a l'axe du corps 1-2 -- une
-photo inclinee ne fausse donc pas le test -- et le cote dorsal est deduit de
-la position relative de 3 et 4, ce qui rend le controle valable quelle que
-soit l'orientation (tete a gauche ou a droite, photo retournee, case
-"Inverser dorsal/ventral" cochee). Sont EXCLUS de la comparaison le pedoncule
-et la nageoire caudale (16-19), qui depassent le corps par definition, ainsi
-que les extremites d'appendices (12 pectorale, 15 machoire) et les points
-ventraux DERIVES (8, 9, 11), calcules depuis le 4 lui-meme -- les inclure
-signalerait 20,6 pour cent des specimens T-26 pour du bruit de ligne de
-ventre, contre 1,5 pour cent d'erreurs franches une fois exclus ; la barre
-d'echelle (20, 21), le point derive (23) et les charnieres (24, 25) ne sont
-pas des points de contour. La tolerance vaut 0,003 fois la longueur du corps
-(soit 3 pixels pour un poisson de 1000 pixels), en deca de quoi l'ecart releve
-du bruit de clic.
-Les points recales portent le statut \code{"adjusted"} dans le journal, distinct de
-\code{"placed"} : la correction automatique reste tracable specimen par specimen.
+Heights are measured perpendicular to the body axis 1-2 -- a tilted
+photograph therefore does not distort the test -- and the dorsal side is
+deduced from the relative position of 3 and 4, which makes the check valid
+whatever the orientation (head left or right, photograph flipped, the
+"Flip dorsal/ventral" box ticked). EXCLUDED from the comparison are the
+caudal peduncle and fin (16-19), which exceed the body by definition, the
+appendage tips (12 pectoral, 15 jaw) and the DERIVED ventral points
+(8, 9, 11), computed from 4 itself -- including them would flag 20.6 per
+cent of the T-26 specimens for belly-line noise, against 1.5 per cent of
+outright errors once they are excluded; the scale bar (20, 21), the derived
+point (23) and the hinges (24, 25) are not outline points. The tolerance is
+0.003 times the body length (that is 3 pixels for a fish of 1,000 pixels),
+below which the discrepancy is click noise.
+
+Points that were snapped carry the status \code{"adjusted"} in the journal,
+distinct from \code{"placed"}: the automatic correction stays traceable specimen
+by specimen.
+
+The same box also checks the ORDER of the eye vertical. The six points 5, 13,
+7, 14, 6, 8 are placed on one vertical by the FISHMORPH conventions, and
+anatomy fixes their order along it, from the back downwards: top of the head,
+top of the eye, centre of the eye, bottom of the eye, bottom of the head,
+body underside. Two failures follow from that and from nothing else -- 5 no
+longer topping the group, which under-measures \code{Hd} exactly as a misplaced 3
+under-measures \code{Bd}; and a local swap, typically 13 and 14 when the eye is
+clicked bottom-first, or 7 outside the 13-14 pair. Neither is visible in a
+coordinate table: each pair stays internally consistent, \code{Ed} (13-14) keeps
+its length, while \code{Eh} (7-8) silently refers to the wrong edge of the eye.
+An inversion is reported but \strong{never corrected automatically}: moving a
+point to satisfy the order would invent a measurement rather than repair one.
 }
 
 \examples{
@@ -117,7 +131,7 @@ launch_fishmorph_digitizer(
 }
 }
 \seealso{
-\code{\link[=fishmorph_consolidate]{fishmorph_consolidate()}} pour relire le journal,
-\code{\link[=fishmorph_build_db]{fishmorph_build_db()}} pour en construire la base,
-\code{\link[=launch_fishmorph_space]{launch_fishmorph_space()}} pour explorer l'espace morphologique.
+\code{\link[=fishmorph_consolidate]{fishmorph_consolidate()}} to read the journal back,
+\code{\link[=fishmorph_build_db]{fishmorph_build_db()}} to build the database from it,
+\code{\link[=launch_fishmorph_space]{launch_fishmorph_space()}} to explore the morphological space.
 }

@@ -1,43 +1,43 @@
 # =============================================================================
-# shiny-reconstructor.R -- compatibilite ascendante.
+# shiny-reconstructor.R -- backward compatibility.
 #
-# L'outil de digitalisation vit desormais dans R/digitizer-app.R sous le nom
-# launch_fishmorph_digitizer(). L'ancien prototype (une photo isolee chargee par
-# upload, parametres au curseur, export CSV) a ete retire : maintenir deux
-# implementations de la MEME geometrie garantissait qu'elles finiraient par
-# diverger, et c'est exactement le genre de divergence silencieuse qui produit
-# deux jeux de landmarks incomparables dans une meme base.
+# The digitizing tool now lives in R/digitizer-app.R under the name
+# launch_fishmorph_digitizer(). The former prototype (a single photograph loaded
+# by upload, parameters on sliders, CSV export) has been removed: maintaining
+# two implementations of the SAME geometry guaranteed that they would eventually
+# drift apart, and that is exactly the kind of silent divergence which produces
+# two incomparable sets of landmarks inside one database.
 #
-# Ce fichier ne conserve qu'un alias deprecie.
+# This file keeps nothing but a deprecated alias.
 # =============================================================================
 
-#' Lance l'outil de reconstruction (deprecie)
+#' Launch the reconstruction tool (deprecated)
 #'
-#' Depuis la version 0.2.0, l'outil de digitalisation est
-#' [launch_fishmorph_digitizer()], qui travaille directement sur le classeur
-#' FISHMORPH, gere trois files de travail (reconstruire, corriger, nouvelles
-#' photos) et securise chaque enregistrement par un journal append-only.
+#' Since version 0.2.0 the digitizing tool is [launch_fishmorph_digitizer()],
+#' which works directly on the FISHMORPH workbook, handles three working queues
+#' (reconstruct, correct, new photographs) and secures every record with an
+#' append-only journal.
 #'
-#' L'ancien prototype ne prenait qu'une photo a la fois et exportait un CSV
-#' isole : il n'existe pas de correspondance exacte entre ses arguments et ceux
-#' du nouvel outil, qui exige un classeur. Cette fonction avertit puis redirige.
+#' The former prototype took one photograph at a time and exported an isolated
+#' CSV: there is no exact correspondence between its arguments and those of the
+#' new tool, which requires a workbook. This function warns, then redirects.
 #'
-#' @param segments_csv Ignore. Conserve pour ne pas casser les appels existants.
-#' @param ... Passe a [launch_fishmorph_digitizer()].
-#' @return Invisiblement `NULL`.
+#' @param segments_csv Ignored. Kept so that existing calls do not break.
+#' @param ... Passed to [launch_fishmorph_digitizer()].
+#' @return Invisibly `NULL`.
 #' @seealso [launch_fishmorph_digitizer()]
 #' @export
 launch_fishmorph_reconstructor <- function(segments_csv = NULL, ...) {
   if (!is.null(segments_csv))
-    warning("`segments_csv` n'est plus utilise : le nouvel outil lit les ",
-            "segments directement dans le classeur FISHMORPH.", call. = FALSE)
+    warning("`segments_csv` is no longer used: the new tool reads the segments ",
+            "straight from the FISHMORPH workbook.", call. = FALSE)
   .Deprecated(
     new = "launch_fishmorph_digitizer",
     package = "Rfishmorph",
     msg = paste0(
-      "launch_fishmorph_reconstructor() est deprecie depuis Rfishmorph 0.2.0.\n",
-      "  Utilisez launch_fishmorph_digitizer(xlsx_path =, photo_dir =, mode =) :\n",
-      "  l'outil travaille sur le classeur FISHMORPH et journalise chaque ",
-      "enregistrement."))
+      "launch_fishmorph_reconstructor() is deprecated since Rfishmorph 0.2.0.\n",
+      "  Use launch_fishmorph_digitizer(xlsx_path =, photo_dir =, mode =):\n",
+      "  the tool works on the FISHMORPH workbook and journals every ",
+      "record."))
   launch_fishmorph_digitizer(...)
 }

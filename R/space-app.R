@@ -1,66 +1,66 @@
 # =============================================================================
-# space-app.R -- lanceur de l'explorateur de l'espace morphologique.
+# space-app.R -- launcher for the morphological space explorer.
 #
-# L'application elle-meme (anciennement le projet autonome "FishMorphSpace") vit
-# dans inst/shiny/fishmorph_space/app.R. Elle n'est PAS reecrite ici : ce fichier
-# ne fait que verifier ses dependances, resoudre le jeu de donnees, et la lancer.
+# The application itself (formerly the standalone "FishMorphSpace" project)
+# lives in inst/shiny/fishmorph_space/app.R. It is NOT rewritten here: this file
+# only checks its dependencies, resolves the data set, and launches it.
 #
-# Le jeu de donnees par defaut est embarque dans inst/extdata/fishmorph_data.csv
-# (9556 especes). ATTENTION : ses colonnes de traits sont DEJA en log10(x + 1) --
-# ne pas les re-transformer avant de projeter de nouveaux individus.
+# The default data set is bundled in inst/extdata/fishmorph_data.csv (9,556
+# species). CAUTION: its trait columns are ALREADY log10(x + 1) -- do not
+# transform them again before projecting new individuals.
 # =============================================================================
 
-# Dependances de l'app de visualisation. Elles sont en Suggests : qui veut
-# seulement calculer des ratios n'a aucune raison d'installer plotly ou DT.
+# Dependencies of the visualisation app. They are in Suggests: anyone who only
+# wants to compute ratios has no reason to install plotly or DT.
 .FMS_DEPS <- c("shiny", "bslib", "ggplot2", "dplyr", "tidyr", "DT",
                "RColorBrewer", "scales", "ggrepel", "plotly", "MASS", "magrittr")
 
-# Verifie un jeu de dependances et produit un message d'installation ACTIONNABLE
-# (la ligne install.packages() prete a copier) plutot qu'un echec au chargement
-# du premier library() manquant, a l'interieur de l'app.
+# Check a set of dependencies and produce an ACTIONABLE installation message
+# (the install.packages() line, ready to copy) rather than a failure on the
+# first missing library() inside the app.
 .fm_require <- function(pkgs, what) {
   miss <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
   if (!length(miss)) return(invisible(TRUE))
-  stop(what, " requiert ", length(miss), " package(s) non installe(s) : ",
+  stop(what, " requires ", length(miss), " package(s) that are not installed: ",
        paste(miss, collapse = ", "), "\n  install.packages(c(",
        paste0('"', miss, '"', collapse = ", "), "))", call. = FALSE)
 }
 
-#' Explorateur de l'espace morphologique des poissons d'eau douce
+#' Morphological space explorer for freshwater fishes
 #'
-#' Lance l'application 'shiny' qui explore l'espace morphologique global des
-#' poissons d'eau douce a partir de la base FISHMORPH (Brosse et al. 2021) :
-#' analyse en composantes principales des neuf traits sans dimension, densite de
-#' l'espace fonctionnel, coloration par ordre ou par statut IUCN, et projection
-#' d'un jeu d'especes fourni par l'utilisateur.
+#' Launches the 'shiny' application that explores the global morphological space
+#' of freshwater fishes from the FISHMORPH database (Brosse et al. 2021):
+#' principal component analysis of the nine dimensionless traits, density of the
+#' functional space, colouring by order or by IUCN status, and projection of a
+#' user-supplied set of species.
 #'
-#' @param data Chemin d'un CSV de traits (separateur point-virgule) remplacant le
-#'   jeu embarque. Utile pour travailler sur une version plus recente, ou sur le
-#'   resultat de [fishmorph_build_db()] exporte en CSV. NULL utilise le jeu
-#'   embarque dans le package.
-#' @param launch.browser Ouvrir dans le navigateur par defaut.
-#' @param ... Passe a [shiny::runApp()] (par exemple `port`).
-#' @return Invisiblement `NULL` ; appelee pour son effet de bord.
-#' @seealso [launch_fishmorph_digitizer()] pour produire les landmarks,
-#'   [project_fishmorph()] pour projeter des specimens par le calcul plutot
-#'   qu'interactivement.
+#' @param data Path to a trait CSV (semicolon-separated) replacing the bundled
+#'   data set. Useful to work on a more recent version, or on the result of
+#'   [fishmorph_build_db()] exported to CSV. `NULL` uses the data set bundled
+#'   with the package.
+#' @param launch.browser Open in the default browser.
+#' @param ... Passed to [shiny::runApp()] (for example `port`).
+#' @return Invisibly `NULL`; called for its side effect.
+#' @seealso [launch_fishmorph_digitizer()] to produce the landmarks,
+#'   [project_fishmorph()] to project specimens by computation rather than
+#'   interactively.
 #' @examples
 #' \dontrun{
 #' launch_fishmorph_space()
-#' launch_fishmorph_space(data = "mes_traits.csv")
+#' launch_fishmorph_space(data = "my_traits.csv")
 #' }
 #' @export
 launch_fishmorph_space <- function(data = NULL, launch.browser = TRUE, ...) {
-  .fm_require(.FMS_DEPS, "L'explorateur de l'espace morphologique")
+  .fm_require(.FMS_DEPS, "The morphological space explorer")
 
   appdir <- system.file("shiny", "fishmorph_space", package = "Rfishmorph")
   if (!nzchar(appdir) || !file.exists(file.path(appdir, "app.R")))
-    stop("Application introuvable dans le package. Reinstallez 'Rfishmorph'.",
+    stop("Application not found in the package. Reinstall 'Rfishmorph'.",
          call. = FALSE)
 
   if (!is.null(data)) {
     if (!file.exists(data))
-      stop("Jeu de donnees introuvable : ", data, call. = FALSE)
+      stop("Data set not found: ", data, call. = FALSE)
     old <- options(Rfishmorph.space_data = normalizePath(data))
     on.exit(options(old), add = TRUE)
   }
@@ -68,16 +68,16 @@ launch_fishmorph_space <- function(data = NULL, launch.browser = TRUE, ...) {
   invisible(NULL)
 }
 
-#' Chemin du jeu de traits FISHMORPH embarque
+#' Path of the bundled FISHMORPH trait table
 #'
-#' Renvoie le chemin du CSV utilise par defaut par [launch_fishmorph_space()],
-#' pour l'inspecter ou le lire directement.
+#' Returns the path of the CSV used by default by [launch_fishmorph_space()],
+#' to inspect it or read it directly.
 #'
-#' Rappel : les colonnes de traits y sont DEJA en log10(x + 1). Les relire pour
-#' projeter de nouveaux individus ne demande donc aucune transformation
-#' supplementaire, et en appliquer une fausserait la projection.
+#' A reminder: its trait columns are ALREADY log10(x + 1). Reading them back to
+#' project new individuals therefore needs no further transformation, and
+#' applying one would distort the projection.
 #'
-#' @return Chemin de fichier (chaine de caracteres).
+#' @return A file path (character string).
 #' @examples
 #' p <- fishmorph_space_data()
 #' if (nzchar(p)) utils::head(utils::read.csv(p, sep = ";"), 3)

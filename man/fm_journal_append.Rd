@@ -2,7 +2,7 @@
 % Please edit documentation in R/journal.R
 \name{fm_journal_append}
 \alias{fm_journal_append}
-\title{Ajoute un enregistrement (un specimen) au journal}
+\title{Append one record (one specimen) to the journal}
 \usage{
 fm_journal_append(
   jr,
@@ -21,25 +21,25 @@ fm_journal_append(
 )
 }
 \arguments{
-\item{jr}{Poignee renvoyee par \code{\link[=fm_journal_open]{fm_journal_open()}}.}
+\item{jr}{Handle returned by \code{\link[=fm_journal_open]{fm_journal_open()}}.}
 
-\item{row_key}{Cle de deduplication (espece, ou fichier photo en mode "new").}
+\item{row_key}{Deduplication key (species, or photo file in "new" mode).}
 
-\item{coords}{Matrice a 2 colonnes (X, Y) indexee par numero de landmark.}
+\item{coords}{Two-column matrix (X, Y) indexed by landmark number.}
 
-\item{points}{Numeros de landmarks a enregistrer.}
+\item{points}{Landmark numbers to record.}
 
-\item{status}{Vecteur nomme (nom = numero de point) de statuts ; defaut "placed".}
+\item{status}{Named vector (name = point number) of statuses; default "placed".}
 
-\item{species, photo_file, mode, target_sheet, img_w, img_h, ruler_mm, mm_per_px}{Metadonnees.}
+\item{species, photo_file, mode, target_sheet, img_w, img_h, ruler_mm, mm_per_px}{Metadata.}
 }
 \value{
-Le \code{record_id} ecrit (invisible), ou NULL si rien a ecrire.
+The \code{record_id} written (invisibly), or NULL if there was nothing to write.
 }
 \description{
-Un "enregistrement" = un clic sur "Enregistrer", soit une ligne par landmark
-partageant le meme \code{record_id}. L'ecriture est un simple \code{cat(append = TRUE)}
-d'un bloc de texte deja construit : le fichier existant n'est jamais relu ni
-reecrit, donc une interruption ne peut tronquer que la derniere ligne (qui sera
-ecartee a la lecture).
+A "record" = one press of "Enregistrer", that is one row per landmark, all
+sharing the same \code{record_id}. Writing is a plain \code{cat(append = TRUE)} of a
+block of text built beforehand: the existing file is never re-read nor
+rewritten, so an interruption can only truncate the last line (which will be
+discarded when read).
 }

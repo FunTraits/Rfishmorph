@@ -2,18 +2,18 @@
 % Please edit documentation in R/journal.R
 \name{fishmorph_journal_qc}
 \alias{fishmorph_journal_qc}
-\title{Controle qualite rapide d'une consolidation}
+\title{Quick quality control of a consolidation}
 \usage{
 fishmorph_journal_qc(journal_dir, expect = c(1:19, 22L, 23L))
 }
 \arguments{
-\item{journal_dir}{Dossier des journaux, ou data.frame deja lu.}
+\item{journal_dir}{Journal directory, or an already-read data.frame.}
 
-\item{expect}{Points attendus pour un specimen complet.}
+\item{expect}{Points expected for a complete specimen.}
 }
 \description{
-Signale ce qu'un tableau de coordonnees ne montre pas : points jamais verifies
-(restes a la graine), points declares non mesurables, points recales par une
-convention (colonnes \code{n_adjusted} / \code{adjusted} : 3 ou 4 ramenes a la
-profondeur maximale du corps par l'application), specimens incomplets.
+Reports what a table of coordinates does not show: points never checked
+(still at their seed), points declared non-measurable, points snapped by a
+convention (columns \code{n_adjusted} / \code{adjusted}: 3 or 4 brought back to the
+maximum body depth by the application), incomplete specimens.
 }

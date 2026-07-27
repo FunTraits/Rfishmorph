@@ -2,16 +2,16 @@
 % Please edit documentation in R/journal.R
 \name{fm_journal_history}
 \alias{fm_journal_history}
-\title{Historique des enregistrements d'une cle}
+\title{History of the records of one key}
 \usage{
 fm_journal_history(journal_dir, row_key = NULL)
 }
 \arguments{
-\item{journal_dir}{Dossier des journaux, ou data.frame deja lu.}
+\item{journal_dir}{Journal directory, or an already-read data.frame.}
 
-\item{row_key}{Cle a inspecter. NULL -> resume de toutes les cles.}
+\item{row_key}{Key to inspect. NULL -> summary of every key.}
 }
 \description{
-Utile pour verifier qu'une correction a bien ete prise, ou pour comparer deux
-passages sur le meme specimen.
+Useful to check that a correction was taken into account, or to compare two
+passes over the same specimen.
 }

@@ -46,17 +46,17 @@ test_that("check_infinite_ratios flags a zero denominator", {
   expect_s3_class(flags, "data.frame")
 })
 
-# Les tests ci-dessous utilisent volontairement l'echantillon de 400 especes :
-# ils portent sur la MECANIQUE (structure des objets, dimensions, invariants),
-# que la taille du referentiel ne change pas, et restent ainsi rapides.
-# Le test qui suit, lui, verifie le DEFAUT reel de la fonction.
+# The tests below deliberately use the 400-species sample: they bear on the
+# MECHANICS (object structure, dimensions, invariants), which the size of the
+# reference table does not change, and they stay fast that way.
+# The test that follows checks the real DEFAULT of the function.
 test_that("load_fishmorph_reference defaults to the full table", {
   full <- load_fishmorph_reference()
   samp <- load_fishmorph_reference("sample")
   expect_identical(full, load_fishmorph_reference("full"))
   expect_gt(nrow(full), nrow(samp))
   expect_equal(nrow(samp), 400L)
-  expect_identical(names(full), names(samp))          # meme schema
+  expect_identical(names(full), names(samp))          # same schema
   expect_true(all(samp$Species %in% full$Species))    # sous-ensemble strict
   ratios <- fishmorph_ratio_names()
   expect_false(anyNA(full[, ratios]))                 # 9 ratios complets partout

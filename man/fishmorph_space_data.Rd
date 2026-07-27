@@ -2,21 +2,21 @@
 % Please edit documentation in R/space-app.R
 \name{fishmorph_space_data}
 \alias{fishmorph_space_data}
-\title{Chemin du jeu de traits FISHMORPH embarque}
+\title{Path of the bundled FISHMORPH trait table}
 \usage{
 fishmorph_space_data()
 }
 \value{
-Chemin de fichier (chaine de caracteres).
+A file path (character string).
 }
 \description{
-Renvoie le chemin du CSV utilise par defaut par \code{\link[=launch_fishmorph_space]{launch_fishmorph_space()}},
-pour l'inspecter ou le lire directement.
+Returns the path of the CSV used by default by \code{\link[=launch_fishmorph_space]{launch_fishmorph_space()}},
+to inspect it or read it directly.
 }
 \details{
-Rappel : les colonnes de traits y sont DEJA en log10(x + 1). Les relire pour
-projeter de nouveaux individus ne demande donc aucune transformation
-supplementaire, et en appliquer une fausserait la projection.
+A reminder: its trait columns are ALREADY log10(x + 1). Reading them back to
+project new individuals therefore needs no further transformation, and
+applying one would distort the projection.
 }
 \examples{
 p <- fishmorph_space_data()

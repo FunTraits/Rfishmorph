@@ -2,22 +2,22 @@
 % Please edit documentation in R/journal.R
 \name{fm_journal_open}
 \alias{fm_journal_open}
-\title{Ouvre un journal de session (append-only)}
+\title{Open a session journal (append-only)}
 \usage{
 fm_journal_open(journal_dir, operator = NULL, app_version = NA_character_)
 }
 \arguments{
-\item{journal_dir}{Dossier des journaux.}
+\item{journal_dir}{Journal directory.}
 
-\item{operator}{Identifiant de l'operateur (defaut : utilisateur systeme).}
+\item{operator}{Operator identifier (default: the system user).}
 
-\item{app_version}{Version de l'outil de saisie, tracee dans chaque ligne.}
+\item{app_version}{Version of the digitizing tool, traced in every row.}
 }
 \value{
-Une "poignee" de journal a passer a \code{\link[=fm_journal_append]{fm_journal_append()}}.
+A journal "handle" to pass to \code{\link[=fm_journal_append]{fm_journal_append()}}.
 }
 \description{
-Cree \code{journal_dir} au besoin et un fichier TSV propre a la session. Le fichier
-n'est ecrit qu'en AJOUT : il n'est jamais relu ni reecrit par l'app, et devient
-immuable des la fin de la session.
+Creates \code{journal_dir} if needed and a TSV file specific to the session. The
+file is only ever APPENDED to: it is never re-read nor rewritten by the app,
+and becomes immutable the moment the session ends.
 }

@@ -1,92 +1,93 @@
 # =============================================================================
-# journal.R -- couche de capture (journal append-only)
+# journal.R -- the capture layer (append-only journal)
 #
-# Couche de STOCKAGE des landmarks FISHMORPH : journal append-only + consolidation.
+# STORAGE layer for FISHMORPH landmarks: append-only journal + consolidation.
 #
-# PROBLEME RESOLU
-#   L'app de digitalisation ecrivait chaque specimen en REECRIVANT integralement
-#   un classeur .xlsx de plusieurs Mo, dans un dossier synchronise (OneDrive).
-#   Un crash de R, une coupure ou un verrou de synchronisation pendant cette
-#   reecriture peut donc detruire TOUT le fichier -- pas seulement le dernier
-#   specimen. Le volume n'est pas en cause (quelques milliers de specimens x ~25
-#   points = quelques Mo) : c'est le MOTIF D'ECRITURE qui est fragile.
+# THE PROBLEM SOLVED
+#   The digitizing app used to write every specimen by REWRITING IN FULL an
+#   .xlsx workbook of several Mb, inside a synchronised folder (OneDrive). A
+#   crash of R, a power cut or a synchronisation lock during that rewrite can
+#   therefore destroy THE WHOLE file -- not merely the last specimen. The volume
+#   is not the issue (a few thousand specimens x ~25 points = a few Mb): it is
+#   the WRITE PATTERN that is fragile.
 #
-# PRINCIPE
-#   Ne jamais reecrire ce qui est deja ecrit. La capture devient un flux de
-#   fichiers immuables ; la base analysable est RECONSTRUITE a la demande.
+# THE PRINCIPLE
+#   Never rewrite what is already written. Capture becomes a stream of immutable
+#   files; the analysable table is REBUILT on demand.
 #
-#     photos --[app]--> journal append-only --[consolidation]--> csv / xlsx
-#                       (jamais modifie)                          (export)
+#     photographs --[app]--> append-only journal --[consolidation]--> csv / xlsx
+#                            (never modified)                          (export)
 #
-#   * Un journal par SESSION : "landmarks_<operateur>_<horodatage>.tsv".
-#     Une session terminee = fichier fige -> OneDrive ne peut plus creer de copie
-#     en conflit, et deux postes produisent deux fichiers qui fusionnent par
-#     simple concatenation.
-#   * Format LONG (une ligne = UN point) : ajouter un landmark demain n'est plus
-#     une migration de schema, seulement des lignes en plus.
-#   * Un crash n'abime au pire que la derniere ligne du journal courant, qui est
-#     detectee et jetee a la lecture.
-#   * La deduplication garde le dernier enregistrement par cle, ce qui donne
-#     gratuitement l'HISTORIQUE des corrections (fm_journal_history()).
+#   * One journal per SESSION: "landmarks_<operator>_<timestamp>.tsv". A
+#     finished session is a frozen file -> OneDrive can no longer produce a
+#     conflicted copy of it, and two workstations produce two files that merge
+#     by plain concatenation.
+#   * LONG format (one row = ONE point): adding a landmark tomorrow is no longer
+#     a schema migration, only extra rows.
+#   * A crash damages at worst the last line of the current journal, which is
+#     detected and dropped when read.
+#   * Deduplication keeps the last record per key, which yields the HISTORY of
+#     corrections for free (fm_journal_history()).
 #
-# DEPENDANCES : aucune pour le journal (base R). openxlsx uniquement pour les
-#   exports .xlsx optionnels.
+# DEPENDENCIES: none for the journal itself (base R). openxlsx only for the
+#   optional .xlsx exports.
 #
-# Voir R/digitizer-app.R (launch_fishmorph_digitizer) pour l'ecriture ; exemples
-# de relecture et de consolidation en fin de fichier.
+# See R/digitizer-app.R (launch_fishmorph_digitizer) for the writing side;
+# examples of reading back and consolidating at the end of this file.
 #
-# COUCHE SUPERIEURE : R/database.R construit, A PARTIR de ces journaux, une base
-# DuckDB derivee (types, contraintes, vues, SQL) et les exports Parquet / CSV
-# d'archivage. Cette base est jetable et reconstructible ; les journaux restent
-# la seule source de verite.
+# THE LAYER ABOVE: R/database.R builds, FROM these journals, a derived DuckDB
+# database (types, constraints, views, SQL) and the Parquet / CSV archival
+# exports. That database is disposable and rebuildable; the journals remain the
+# only source of truth.
 # =============================================================================
 
-# Colonnes du journal, dans l'ordre. Toute colonne ajoutee plus tard doit l'etre
-# EN FIN de liste : fm_journal_read() tolere des journaux de largeurs differentes
-# (anciens fichiers) en completant les colonnes absentes par NA.
+# Journal columns, in order. Any column added later MUST be appended at the END
+# of this list: fm_journal_read() tolerates journals of different widths (older
+# files) by filling the absent columns with NA.
 .FM_JOURNAL_COLS <- c(
-  "record_id",     # identifiant de l'ENREGISTREMENT (un clic sur "Enregistrer")
-  "timestamp",     # ISO 8601 UTC, tri lexicographique = tri chronologique
-  "operator",      # qui a digitalise
-  "app_version",   # version de l'outil de saisie
+  "record_id",     # identifier of the RECORD (one press of "Enregistrer")
+  "timestamp",     # ISO 8601 UTC, lexicographic order = chronological order
+  "operator",      # who digitized
+  "app_version",   # version of the digitizing tool
   "mode",          # reconstruct | correct | new
-  "target_sheet",  # feuille du classeur visee (tracabilite)
-  "row_key",       # CLE de deduplication (espece, ou fichier photo en mode "new")
+  "target_sheet",  # workbook sheet aimed at (traceability)
+  "row_key",       # deduplication KEY (species, or photo file in "new" mode)
   "species",       # Genus species
-  "photo_file",    # nom du fichier photo (basename)
-  "img_w", "img_h",# dimensions de l'image en pixels : les X/Y sont en pixels IMAGE
-  "ruler_mm",      # longueur reelle de la barre d'echelle 20-21 (mm), ou NA
-  "mm_per_px",     # echelle deduite, ou NA
-  "landmark",      # numero du point
-  "x", "y",        # coordonnees en pixels image (Y vers le bas)
-  "status"         # placed | seeded | adjusted | derived | na  (voir ci-dessous)
+  "photo_file",    # photograph file name (basename)
+  "img_w", "img_h",# image size in pixels: the X/Y are in IMAGE pixels
+  "ruler_mm",      # real length of the scale bar 20-21 (mm), or NA
+  "mm_per_px",     # resulting scale, or NA
+  "landmark",      # point number
+  "x", "y",        # coordinates in image pixels (Y downwards)
+  "status"         # placed | seeded | adjusted | derived | na  (see below)
 )
 
-# Signification de `status` -- c'est l'information que le format large du classeur
-# ne peut pas porter, et elle est precieuse en controle qualite :
-#   placed  : point pose ou deplace a la main (ou recharge d'une saisie anterieure)
-#   seeded  : point encore a sa position de GRAINE, jamais verifie par l'operateur
-#   adjusted: point recale automatiquement par une convention FISHMORPH a la
-#             demande de l'operateur (3/4 ramenes a la profondeur maximale du
-#             corps) : ni pointe a la main, ni simple graine
-#   derived : point calcule automatiquement (8, 9, 11, 15, 23)
-#   na      : point explicitement marque NON MESURABLE
+# Meaning of `status` -- this is the information the wide workbook layout cannot
+# carry, and it is precious in quality control:
+#   placed  : point placed or moved by hand (or reloaded from an earlier entry)
+#   seeded  : point still at its SEED position, never checked by the operator
+#   adjusted: point snapped automatically by a FISHMORPH convention at the
+#             operator's request (3/4 brought back to the maximum body depth):
+#             neither pointed at by hand, nor a plain seed
+#   derived : point computed automatically (8, 9, 11, 15, 23)
+#   na      : point explicitly marked NON-MEASURABLE
 .FM_JOURNAL_STATUS <- c("placed", "seeded", "adjusted", "derived", "na")
 
 
-# --- utilitaires -------------------------------------------------------------
+# --- utilities ---------------------------------------------------------------
 
-# horodatage ISO 8601 en UTC, a la milliseconde. En UTC et avec ce format, l'ordre
-# lexicographique des chaines EST l'ordre chronologique : la deduplication peut
-# donc trier sans jamais reparser de date (et sans dependre du fuseau du poste).
+# ISO 8601 timestamp in UTC, to the millisecond. In UTC and in this format the
+# lexicographic order of the strings IS the chronological order: deduplication
+# can therefore sort without ever re-parsing a date (and without depending on
+# the workstation's time zone).
 .fm_iso_now <- function() format(as.POSIXct(Sys.time(), tz = "UTC"),
                                  "%Y-%m-%dT%H:%M:%OS3Z", tz = "UTC")
 
-# neutralise ce qui casserait un TSV (tabulation, retour a la ligne, guillemets).
-# Renvoie TOUJOURS au moins un element : une metadonnee absente (NULL, ou input
-# Shiny pas encore initialise) donnerait sinon un vecteur de longueur 0, et
-# data.frame() echouerait sur des longueurs incompatibles -- ce qui ferait perdre
-# l'enregistrement au lieu de le degrader.
+# Neutralises whatever would break a TSV (tab, newline, quote). ALWAYS returns
+# at least one element: an absent piece of metadata (NULL, or a Shiny input not
+# yet initialised) would otherwise give a zero-length vector, and data.frame()
+# would fail on incompatible lengths -- which would LOSE the record instead of
+# degrading it.
 .fm_tsv_safe <- function(x) {
   x <- as.character(x)
   if (!length(x)) return("")
@@ -94,63 +95,62 @@
   gsub("[\t\r\n\"]+", " ", x)
 }
 
-#' Ecriture ATOMIQUE d'un classeur openxlsx
+#' ATOMIC write of an openxlsx workbook
 #'
-#' `saveWorkbook()` ecrase le fichier cible en place : pendant la reecriture (des
-#' secondes pour un classeur de plusieurs Mo) le fichier est dans un etat
-#' intermediaire, et une interruption le detruit. On ecrit donc dans un fichier
-#' temporaire du MEME dossier -- condition necessaire pour que le renommage soit
-#' atomique, un renommage inter-volumes etant en realite une copie -- puis on
-#' bascule par renommage.
+#' `saveWorkbook()` overwrites its target in place: while it is being rewritten
+#' (seconds, for a workbook of several Mb) the file is in an intermediate state,
+#' and an interruption destroys it. We therefore write to a temporary file in
+#' the SAME directory -- a necessary condition for the rename to be atomic, a
+#' cross-volume rename being in fact a copy -- then switch by renaming.
 #'
-#' L'ancien fichier n'est pas supprime mais deplace en "<nom>.prev.xlsx", ce qui
-#' fournit une sauvegarde d'une generation pour un cout nul. En cas d'echec du
-#' renommage final, l'ancien fichier est restaure.
+#' The old file is not deleted but moved to "<name>.prev.xlsx", which gives a
+#' one-generation backup at no cost. Should the final rename fail, the old file
+#' is restored.
 #'
-#' @param wb Objet openxlsx.
-#' @param path Chemin cible.
-#' @param keep_prev Conserver la generation precedente (defaut TRUE).
-#' @return TRUE (invisible) si l'ecriture a abouti.
+#' @param wb An openxlsx object.
+#' @param path Target path.
+#' @param keep_prev Keep the previous generation (default TRUE).
+#' @return TRUE (invisibly) if the write succeeded.
 #' @export
 fm_save_workbook_atomic <- function(wb, path, keep_prev = TRUE) {
   if (!requireNamespace("openxlsx", quietly = TRUE))
-    stop("Le package 'openxlsx' est requis.", call. = FALSE)
+    stop("Package 'openxlsx' is required.", call. = FALSE)
   tmp <- file.path(dirname(path),
                    sprintf(".%s.tmp%d", basename(path), Sys.getpid()))
   on.exit(if (file.exists(tmp)) unlink(tmp), add = TRUE)
   openxlsx::saveWorkbook(wb, tmp, overwrite = TRUE)
-  if (!file.exists(tmp)) stop("Ecriture temporaire echouee : ", tmp, call. = FALSE)
+  if (!file.exists(tmp)) stop("Temporary write failed: ", tmp, call. = FALSE)
 
   prev <- sub("(\\.xlsx)?$", ".prev.xlsx", path)
   had  <- file.exists(path)
-  # On ecarte l'ancien fichier AVANT de renommer : sous Windows, file.rename()
-  # echoue si la destination existe deja.
+  # The old file is moved aside BEFORE renaming: on Windows, file.rename() fails
+  # when the destination already exists.
   if (had) {
     if (file.exists(prev)) unlink(prev)
     if (!file.rename(path, prev))
-      stop("Impossible d'ecarter l'ancien fichier (verrouille par Excel ?) : ",
+      stop("Could not move the old file aside (locked by Excel?): ",
            path, call. = FALSE)
   }
   if (!file.rename(tmp, path)) {
-    if (had) file.rename(prev, path)              # restauration
-    stop("Renommage final echoue : ", path, call. = FALSE)
+    if (had) file.rename(prev, path)              # restore
+    stop("Final rename failed: ", path, call. = FALSE)
   }
   if (had && !keep_prev) unlink(prev)
   invisible(TRUE)
 }
 
-# --- journal : ecriture ------------------------------------------------------
+# --- journal: writing --------------------------------------------------------
 
-#' Ouvre un journal de session (append-only)
+#' Open a session journal (append-only)
 #'
-#' Cree `journal_dir` au besoin et un fichier TSV propre a la session. Le fichier
-#' n'est ecrit qu'en AJOUT : il n'est jamais relu ni reecrit par l'app, et devient
-#' immuable des la fin de la session.
+#' Creates `journal_dir` if needed and a TSV file specific to the session. The
+#' file is only ever APPENDED to: it is never re-read nor rewritten by the app,
+#' and becomes immutable the moment the session ends.
 #'
-#' @param journal_dir Dossier des journaux.
-#' @param operator Identifiant de l'operateur (defaut : utilisateur systeme).
-#' @param app_version Version de l'outil de saisie, tracee dans chaque ligne.
-#' @return Une "poignee" de journal a passer a [fm_journal_append()].
+#' @param journal_dir Journal directory.
+#' @param operator Operator identifier (default: the system user).
+#' @param app_version Version of the digitizing tool, traced in every row.
+#' @return A journal "handle" to pass to [fm_journal_append()].
 #' @export
 fm_journal_open <- function(journal_dir, operator = NULL, app_version = NA_character_) {
   if (is.null(operator) || !nzchar(operator))
@@ -159,47 +159,47 @@ fm_journal_open <- function(journal_dir, operator = NULL, app_version = NA_chara
   if (!dir.exists(journal_dir))
     dir.create(journal_dir, recursive = TRUE, showWarnings = FALSE)
   if (!dir.exists(journal_dir))
-    stop("Impossible de creer le dossier du journal : ", journal_dir, call. = FALSE)
+    stop("Could not create the journal directory: ", journal_dir, call. = FALSE)
 
   stamp <- format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y%m%dT%H%M%SZ", tz = "UTC")
   sid   <- paste0(operator, "_", stamp)
   path  <- file.path(journal_dir, paste0("landmarks_", sid, ".tsv"))
-  # collision improbable (deux lancements dans la meme seconde) -> suffixe
+  # unlikely collision (two launches within the same second) -> suffix
   k <- 1L
   while (file.exists(path)) {
     k <- k + 1L
     path <- file.path(journal_dir, sprintf("landmarks_%s-%d.tsv", sid, k))
   }
   cat(paste(.FM_JOURNAL_COLS, collapse = "\t"), "\n", sep = "", file = path)
-  message("Journal de session : ", path)
+  message("Session journal: ", path)
   structure(list(path = path, dir = journal_dir, operator = operator,
                  session_id = sid, app_version = as.character(app_version),
                  n = local({ e <- new.env(parent = emptyenv()); e$i <- 0L; e })),
             class = "fm_journal")
 }
 
-#' Ajoute un enregistrement (un specimen) au journal
+#' Append one record (one specimen) to the journal
 #'
-#' Un "enregistrement" = un clic sur "Enregistrer", soit une ligne par landmark
-#' partageant le meme `record_id`. L'ecriture est un simple `cat(append = TRUE)`
-#' d'un bloc de texte deja construit : le fichier existant n'est jamais relu ni
-#' reecrit, donc une interruption ne peut tronquer que la derniere ligne (qui sera
-#' ecartee a la lecture).
+#' A "record" = one press of "Enregistrer", that is one row per landmark, all
+#' sharing the same `record_id`. Writing is a plain `cat(append = TRUE)` of a
+#' block of text built beforehand: the existing file is never re-read nor
+#' rewritten, so an interruption can only truncate the last line (which will be
+#' discarded when read).
 #'
-#' @param jr Poignee renvoyee par [fm_journal_open()].
-#' @param row_key Cle de deduplication (espece, ou fichier photo en mode "new").
-#' @param coords Matrice a 2 colonnes (X, Y) indexee par numero de landmark.
-#' @param points Numeros de landmarks a enregistrer.
-#' @param status Vecteur nomme (nom = numero de point) de statuts ; defaut "placed".
-#' @param species,photo_file,mode,target_sheet,img_w,img_h,ruler_mm,mm_per_px Metadonnees.
-#' @return Le `record_id` ecrit (invisible), ou NULL si rien a ecrire.
+#' @param jr Handle returned by [fm_journal_open()].
+#' @param row_key Deduplication key (species, or photo file in "new" mode).
+#' @param coords Two-column matrix (X, Y) indexed by landmark number.
+#' @param points Landmark numbers to record.
+#' @param status Named vector (name = point number) of statuses; default "placed".
+#' @param species,photo_file,mode,target_sheet,img_w,img_h,ruler_mm,mm_per_px Metadata.
+#' @return The `record_id` written (invisibly), or NULL if there was nothing to write.
 #' @export
 fm_journal_append <- function(jr, row_key, coords, points,
                               status = NULL, species = NA, photo_file = NA,
                               mode = NA, target_sheet = NA,
                               img_w = NA, img_h = NA,
                               ruler_mm = NA, mm_per_px = NA) {
-  if (!inherits(jr, "fm_journal")) stop("`jr` n'est pas un journal.", call. = FALSE)
+  if (!inherits(jr, "fm_journal")) stop("`jr` is not a journal.", call. = FALSE)
   points <- points[points >= 1 & points <= nrow(coords)]
   if (!length(points)) return(invisible(NULL))
 
@@ -212,18 +212,18 @@ fm_journal_append <- function(jr, row_key, coords, points,
     hit <- match(as.character(points), names(status))
     st[!is.na(hit)] <- as.character(status)[hit[!is.na(hit)]]
   }
-  # sans coordonnee utilisable, aucun autre statut n'a de sens : on note "na"
-  # plutot que de laisser croire a un point pose ou calcule.
+  # Without a usable coordinate no other status means anything: record "na"
+  # rather than let a reader believe the point was placed or computed.
   fin <- is.finite(coords[points, 1]) & is.finite(coords[points, 2])
   st[!fin] <- "na"
 
-  # formatC(format = "f") et NON format() : ce dernier applique getOption("digits")
-  # (7 chiffres significatifs par defaut) et arrondirait une abscisse a 5 chiffres
-  # sur une grande photo (12345.678 -> "12345.68"). Ici la precision est fixee en
-  # nombre de DECIMALES, jamais en chiffres significatifs.
+  # formatC(format = "f") and NOT format(): the latter applies getOption("digits")
+  # (7 significant digits by default) and would round a five-digit abscissa on a
+  # large photograph (12345.678 -> "12345.68"). Here the precision is fixed in
+  # number of DECIMALS, never in significant digits.
   num <- function(v) {
     v <- suppressWarnings(as.numeric(v))
-    if (!length(v)) return("")          # meme garde que .fm_tsv_safe()
+    if (!length(v)) return("")          # same guard as .fm_tsv_safe()
     out <- rep("", length(v))
     ok <- is.finite(v)
     if (any(ok))
@@ -247,7 +247,7 @@ fm_journal_append <- function(jr, row_key, coords, points,
   invisible(rid)
 }
 
-# --- journal : lecture -------------------------------------------------------
+# --- journal: reading --------------------------------------------------------
 
 .fm_journal_empty <- function() {
   d <- as.data.frame(matrix(character(0), nrow = 0, ncol = length(.FM_JOURNAL_COLS)),
@@ -256,14 +256,14 @@ fm_journal_append <- function(jr, row_key, coords, points,
   d
 }
 
-#' Lit et concatene tous les journaux d'un dossier
+#' Read and concatenate every journal in a directory
 #'
-#' Tolerant par construction : une derniere ligne tronquee par un crash est
-#' ecartee (colonnes obligatoires manquantes), et un journal ecrit par une version
-#' anterieure (moins de colonnes) est complete par des NA.
+#' Tolerant by construction: a last line truncated by a crash is discarded
+#' (mandatory columns missing), and a journal written by an earlier version
+#' (fewer columns) is filled with NA.
 #'
-#' @param journal_dir Dossier des journaux (ou vecteur de dossiers).
-#' @return Un data.frame LONG, une ligne par point et par enregistrement.
+#' @param journal_dir Journal directory (or a vector of directories).
+#' @return A LONG data.frame, one row per point and per record.
 #' @export
 fm_journal_read <- function(journal_dir) {
   fs <- unlist(lapply(journal_dir, function(d)
@@ -276,8 +276,8 @@ fm_journal_read <- function(journal_dir) {
     if (inherits(d, "try-error") || is.null(d) || !nrow(d)) return(NULL)
     for (cc in setdiff(.FM_JOURNAL_COLS, names(d))) d[[cc]] <- rep(NA_character_, nrow(d))
     d <- d[, .FM_JOURNAL_COLS, drop = FALSE]
-    # ligne tronquee (crash en cours d'ecriture) : sans record_id/landmark/row_key
-    # elle est inexploitable -> on la jette silencieusement.
+    # A line truncated mid-write (a crash) is unusable without
+    # record_id/landmark/row_key -> it is dropped silently.
     ok <- !is.na(d$record_id) & nzchar(d$record_id) &
           !is.na(d$landmark)  & nzchar(d$landmark) &
           !is.na(d$row_key)
@@ -290,71 +290,71 @@ fm_journal_read <- function(journal_dir) {
   out
 }
 
-#' Etat des journaux d'un dossier
+#' State of the journals in a directory
 #'
-#' A appeler en PREMIER quand une consolidation renvoie un resultat vide : dit
-#' immediatement si le dossier est le bon, quels fichiers s'y trouvent, et
-#' combien d'enregistrements chacun contient. Un journal a 0 enregistrement est
-#' le cas normal d'une session ouverte puis fermee sans avoir rien enregistre :
-#' l'app cree le fichier au LANCEMENT, pas au premier "Enregistrer".
+#' To be called FIRST whenever a consolidation returns an empty result: it says
+#' immediately whether the directory is the right one, which files are in it,
+#' and how many records each contains. A journal with 0 records is the normal
+#' state of a session opened then closed without saving anything: the app
+#' creates the file at LAUNCH, not at the first "Enregistrer".
 #'
-#' @param journal_dir Dossier des journaux.
-#' @return data.frame : fichier, octets, n_lignes, n_records, n_points, periode.
+#' @param journal_dir Journal directory.
+#' @return data.frame: file, bytes, n_lines, n_records, n_points, period.
 #' @export
 fm_journal_status <- function(journal_dir) {
   ex <- dir.exists(journal_dir)
-  message("Dossier : ", normalizePath(journal_dir, mustWork = FALSE),
-          if (ex) "" else "   [INTROUVABLE]")
+  message("Directory: ", normalizePath(journal_dir, mustWork = FALSE),
+          if (ex) "" else "   [NOT FOUND]")
   if (!ex) return(invisible(NULL))
   fs <- list.files(journal_dir, pattern = "^landmarks_.*\\.tsv$", full.names = TRUE)
   other <- setdiff(list.files(journal_dir), basename(fs))
   if (!length(fs)) {
-    message("Aucun fichier 'landmarks_*.tsv'.",
+    message("No 'landmarks_*.tsv' file.",
             if (length(other))
-              paste0(" Le dossier contient pourtant : ",
+              paste0(" The directory does contain: ",
                      paste(utils::head(other, 5), collapse = ", "),
-                     " -- mauvais dossier, ou fichiers renommes ?") else
-              " Dossier vide : l'app n'a jamais ete lancee avec ce journal_dir.")
+                     " -- wrong directory, or renamed files?") else
+              " Empty directory: the app has never been launched with this journal_dir.")
     return(invisible(NULL))
   }
   J <- fm_journal_read(journal_dir)
   out <- do.call(rbind, lapply(fs, function(f) {
     n_l <- length(readLines(f, warn = FALSE))
-    data.frame(fichier = basename(f), octets = file.size(f),
-               n_lignes = max(0L, n_l - 1L), stringsAsFactors = FALSE)
+    data.frame(file = basename(f), bytes = file.size(f),
+               n_lines = max(0L, n_l - 1L), stringsAsFactors = FALSE)
   }))
   out$n_records <- NA_integer_; out$n_points <- NA_integer_
-  out$debut <- NA_character_;   out$fin <- NA_character_
+  out$start <- NA_character_;   out$end <- NA_character_
   if (nrow(J)) {
-    # rattache chaque enregistrement a sa session via le prefixe du record_id
+    # attach each record to its session through the prefix of the record_id
     sess <- sub("-\\d+$", "", J$record_id)
     for (i in seq_len(nrow(out))) {
-      sid <- sub("^landmarks_(.*)\\.tsv$", "\\1", out$fichier[i])
+      sid <- sub("^landmarks_(.*)\\.tsv$", "\\1", out$file[i])
       k <- sess == sid
       out$n_records[i] <- length(unique(J$record_id[k]))
       out$n_points[i]  <- sum(k)
-      if (any(k)) { out$debut[i] <- min(J$timestamp[k]); out$fin[i] <- max(J$timestamp[k]) }
+      if (any(k)) { out$start[i] <- min(J$timestamp[k]); out$end[i] <- max(J$timestamp[k]) }
     }
   }
   out$n_records[is.na(out$n_records)] <- 0L
   out$n_points[is.na(out$n_points)]   <- 0L
   tot <- sum(out$n_records)
-  message(sprintf("%d fichier(s), %d enregistrement(s), %d point(s) au total.",
+  message(sprintf("%d file(s), %d record(s), %d point(s) in total.",
                   nrow(out), tot, sum(out$n_points)))
   if (tot == 0L)
-    message("-> Aucun 'Enregistrer & suivant' n'a encore ete effectue dans une ",
-            "session utilisant ce journal. Le fichier est cree au LANCEMENT de ",
-            "l'app ; il ne se remplit qu'au premier enregistrement.")
+    message("-> No 'Enregistrer & suivant' has been pressed yet in a session ",
+            "using this journal. The file is created when the app is LAUNCHED; ",
+            "it only fills up at the first save.")
   out
 }
 
-#' Historique des enregistrements d'une cle
+#' History of the records of one key
 #'
-#' Utile pour verifier qu'une correction a bien ete prise, ou pour comparer deux
-#' passages sur le meme specimen.
+#' Useful to check that a correction was taken into account, or to compare two
+#' passes over the same specimen.
 #'
-#' @param journal_dir Dossier des journaux, ou data.frame deja lu.
-#' @param row_key Cle a inspecter. NULL -> resume de toutes les cles.
+#' @param journal_dir Journal directory, or an already-read data.frame.
+#' @param row_key Key to inspect. NULL -> summary of every key.
 #' @export
 fm_journal_history <- function(journal_dir, row_key = NULL) {
   J <- if (is.data.frame(journal_dir)) journal_dir else fm_journal_read(journal_dir)
@@ -375,33 +375,33 @@ fm_journal_history <- function(journal_dir, row_key = NULL) {
 
 # --- consolidation -----------------------------------------------------------
 
-#' Reconstruit la base analysable a partir des journaux
+#' Rebuild the analysable table from the journals
 #'
-#' Pour chaque cle (`row_key`), seul le DERNIER enregistrement est retenu --
-#' horodatage maximal, `record_id` maximal en cas d'egalite. Les enregistrements
-#' anterieurs restent dans les journaux : ils constituent l'historique des
-#' corrections, consultable via [fm_journal_history()], et ne sont jamais perdus.
+#' For each key (`row_key`), only the LAST record is kept -- maximum timestamp,
+#' maximum `record_id` in case of a tie. Earlier records stay in the journals:
+#' they are the history of corrections, readable through [fm_journal_history()],
+#' and they are never lost.
 #'
-#' @param journal_dir Dossier des journaux, ou data.frame deja lu.
-#' @param long TRUE -> renvoie le format long retenu (une ligne par point) au lieu
-#'   du tableau large.
-#' @param drop_na_points TRUE (defaut) -> les points marques "na" sortent en NA.
-#'   FALSE -> leurs coordonnees eventuelles sont conservees.
-#' @param out_csv,out_xlsx Chemins d'export optionnels (l'xlsx exige openxlsx).
-#' @return data.frame large : une ligne par cle, colonnes `<n>_X` / `<n>_Y`.
+#' @param journal_dir Journal directory, or an already-read data.frame.
+#' @param long TRUE -> return the long format kept (one row per point) instead
+#'   of the wide table.
+#' @param drop_na_points TRUE (default) -> points marked "na" come out as NA.
+#'   FALSE -> whatever coordinates they carry are kept.
+#' @param out_csv,out_xlsx Optional export paths (the xlsx one requires openxlsx).
+#' @return A wide data.frame: one row per key, columns `<n>_X` / `<n>_Y`.
 #' @export
 fishmorph_consolidate <- function(journal_dir, long = FALSE, drop_na_points = TRUE,
                                   out_csv = NULL, out_xlsx = NULL) {
   J <- if (is.data.frame(journal_dir)) journal_dir else fm_journal_read(journal_dir)
   if (!nrow(J)) {
     if (!is.data.frame(journal_dir)) fm_journal_status(journal_dir)
-    warning("Aucun enregistrement dans le journal (voir le diagnostic ci-dessus).",
+    warning("No record in the journal (see the diagnosis above).",
             call. = FALSE)
     return(.fm_journal_empty())
   }
-  # dernier enregistrement par cle. On travaille sur la table des ENREGISTREMENTS
-  # (et non des points) pour ne jamais melanger deux passages sur un meme
-  # specimen : on garde un record_id entier, donc un jeu de points coherent.
+  # Last record per key. We work on the table of RECORDS (and not of points) so
+  # as never to mix two passes over one specimen: a whole record_id is kept,
+  # hence a coherent set of points.
   R <- unique(J[, c("row_key", "record_id", "timestamp")])
   R <- R[order(R$row_key, R$timestamp, R$record_id), , drop = FALSE]
   keep <- R$record_id[!duplicated(R$row_key, fromLast = TRUE)]
@@ -432,35 +432,36 @@ fishmorph_consolidate <- function(journal_dir, long = FALSE, drop_na_points = TR
     wide[[paste0(p, "_Y")]] <- s$y[i]
     wide[[paste0(p, "_status")]] <- s$status[i]
   }
-  # colonnes de statut regroupees en fin de tableau (elles genent la lecture des
-  # coordonnees, mais on ne les jette pas : c'est l'info de controle qualite)
+  # Status columns grouped at the end of the table (they get in the way of
+  # reading the coordinates, but they are not thrown away: they are the quality
+  # control information).
   st <- grep("_status$", names(wide), value = TRUE)
   wide <- wide[, c(setdiff(names(wide), st), st), drop = FALSE]
 
   if (!is.null(out_csv)) {
     utils::write.csv(wide, out_csv, row.names = FALSE, na = "", fileEncoding = "UTF-8")
-    message("Export CSV : ", out_csv, " (", nrow(wide), " lignes)")
+    message("CSV export: ", out_csv, " (", nrow(wide), " rows)")
   }
   if (!is.null(out_xlsx)) {
     if (!requireNamespace("openxlsx", quietly = TRUE))
-      warning("openxlsx absent : export .xlsx ignore.", call. = FALSE)
+      warning("openxlsx not installed: .xlsx export skipped.", call. = FALSE)
     else {
       openxlsx::write.xlsx(wide, out_xlsx, overwrite = TRUE)
-      message("Export XLSX : ", out_xlsx, " (", nrow(wide), " lignes)")
+      message("XLSX export: ", out_xlsx, " (", nrow(wide), " rows)")
     }
   }
   wide
 }
 
-#' Controle qualite rapide d'une consolidation
+#' Quick quality control of a consolidation
 #'
-#' Signale ce qu'un tableau de coordonnees ne montre pas : points jamais verifies
-#' (restes a la graine), points declares non mesurables, points recales par une
-#' convention (colonnes `n_adjusted` / `adjusted` : 3 ou 4 ramenes a la
-#' profondeur maximale du corps par l'application), specimens incomplets.
+#' Reports what a table of coordinates does not show: points never checked
+#' (still at their seed), points declared non-measurable, points snapped by a
+#' convention (columns `n_adjusted` / `adjusted`: 3 or 4 brought back to the
+#' maximum body depth by the application), incomplete specimens.
 #'
-#' @param journal_dir Dossier des journaux, ou data.frame deja lu.
-#' @param expect Points attendus pour un specimen complet.
+#' @param journal_dir Journal directory, or an already-read data.frame.
+#' @param expect Points expected for a complete specimen.
 #' @export
 fishmorph_journal_qc <- function(journal_dir, expect = c(1:19, 22L, 23L)) {
   K <- fishmorph_consolidate(journal_dir, long = TRUE, drop_na_points = FALSE)
@@ -468,8 +469,8 @@ fishmorph_journal_qc <- function(journal_dir, expect = c(1:19, 22L, 23L)) {
   qc <- do.call(rbind, lapply(split(K, K$row_key), function(g) data.frame(
     row_key = g$row_key[1], species = g$species[1], photo_file = g$photo_file[1],
     timestamp = g$timestamp[1],
-    n_manquants = sum(!expect %in% g$landmark),
-    manquants = paste(setdiff(expect, g$landmark), collapse = ","),
+    n_missing = sum(!expect %in% g$landmark),
+    missing = paste(setdiff(expect, g$landmark), collapse = ","),
     n_seeded = sum(g$status == "seeded" & g$landmark %in% expect),
     seeded = paste(g$landmark[g$status == "seeded" & g$landmark %in% expect],
                    collapse = ","),
@@ -477,32 +478,32 @@ fishmorph_journal_qc <- function(journal_dir, expect = c(1:19, 22L, 23L)) {
     adjusted = paste(g$landmark[g$status == "adjusted" & g$landmark %in% expect],
                      collapse = ","),
     n_na = sum(g$status == "na" & g$landmark %in% expect),
-    a_echelle = isTRUE(is.finite(suppressWarnings(as.numeric(g$mm_per_px[1])))),
+    has_scale = isTRUE(is.finite(suppressWarnings(as.numeric(g$mm_per_px[1])))),
     stringsAsFactors = FALSE)))
-  qc <- qc[order(-qc$n_manquants, -qc$n_seeded, qc$row_key), , drop = FALSE]
+  qc <- qc[order(-qc$n_missing, -qc$n_seeded, qc$row_key), , drop = FALSE]
   rownames(qc) <- NULL
   qc
 }
 
 # -----------------------------------------------------------------------------
-# Utilisation type
+# Typical use
 # -----------------------------------------------------------------------------
 # library(Rfishmorph)
 # jdir <- "FishMORPH/landmark_journal"
 #
-# # (1) Tableau analysable (une ligne par cle) :
-# base <- fishmorph_consolidate(jdir, out_csv = "landmarks_consolides.csv")
+# # (1) The analysable table (one row per key):
+# base <- fishmorph_consolidate(jdir, out_csv = "consolidated_landmarks.csv")
 #
-# # (2) Controle qualite : points jamais verifies, manquants, absence d'echelle :
-# subset(fishmorph_journal_qc(jdir), n_seeded > 0 | n_manquants > 0)
+# # (2) Quality control: points never checked, missing ones, missing scale:
+# subset(fishmorph_journal_qc(jdir), n_seeded > 0 | n_missing > 0)
 #
-# # (3) Historique des passages sur un specimen :
+# # (3) History of the passes over one specimen:
 # fm_journal_history(jdir, "Coilia.nasus")
 #
-# # (4) Format long, pour geomorph / intraitR :
+# # (4) Long format, for geomorph / intraitR:
 # lg <- fishmorph_consolidate(jdir, long = TRUE)
 #
-# # (5) FUSIONNER DEUX POSTES : copier les .tsv des deux dossiers dans un seul.
-# #     Les noms de fichiers incluent l'operateur et l'horodatage, donc aucune
-# #     collision n'est possible ; il n'y a rien d'autre a faire que la copie.
+# # (5) MERGING TWO WORKSTATIONS: copy the .tsv files of both directories into
+# #     one. File names include the operator and the timestamp, so no collision
+# #     is possible; there is nothing to do beyond the copy.
 # -----------------------------------------------------------------------------

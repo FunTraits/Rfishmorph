@@ -1,52 +1,54 @@
 # =============================================================================
-# database.R -- base DuckDB derivee + validation
+# database.R -- derived DuckDB database + validation
 #
-# Base de donnees DERIVEE (DuckDB) des landmarks FISHMORPH.
+# DERIVED database (DuckDB) of the FISHMORPH landmarks.
 #
-# POSITION DANS LA CHAINE
+# POSITION IN THE CHAIN
 #
-#   journaux TSV  -->  base DuckDB  -->  Parquet / CSV
-#   (append-only,      (contraintes,      (artefacts d'archivage,
-#    SOURCE DE          types, vues,       citables, lisibles sans
-#    VERITE)            requetes SQL)      aucun logiciel specifique)
+#   TSV journals  -->  DuckDB database  -->  Parquet / CSV
+#   (append-only,      (constraints,          (archival artefacts, citable,
+#    SOURCE OF          types, views,          readable without any specific
+#    TRUTH)             SQL queries)           software)
 #
-# La base est DERIVEE et JETABLE : fishmorph_build_db() la reconstruit
-# integralement depuis les journaux en quelques secondes. C'est ce qui rend
-# acceptable de poser un moteur embarque dans un dossier synchronise -- une base
-# corrompue par OneDrive n'est plus un incident de donnees, seulement une
-# reconstruction. Les journaux, eux, ne sont jamais reecrits.
+# The database is DERIVED and DISPOSABLE: fishmorph_build_db() rebuilds it
+# entirely from the journals in a few seconds. That is what makes it acceptable
+# to put an embedded engine inside a synchronised folder -- a database corrupted
+# by OneDrive is no longer a data incident, merely a rebuild. The journals
+# themselves are never rewritten.
 #
-# COROLLAIRE : ne JAMAIS ecrire directement dans la base. Toute saisie passe par
-# l'app (donc par le journal), sans quoi la prochaine reconstruction l'effacera.
+# COROLLARY: NEVER write directly into the database. Every entry goes through
+# the app (hence through the journal), failing which the next rebuild will erase
+# it.
 #
-# CE QUE LA BASE APPORTE, QUE LE TSV NE PEUT PAS
-#   * types (une coordonnee est un DOUBLE, pas la chaine "500,5") ;
-#   * contraintes : landmark dans 1..25, un seul point par (specimen, landmark),
-#     statut dans un vocabulaire ferme, echelle strictement positive ;
-#   * modele relationnel : session d'enregistrement / specimen / observation ;
-#   * requetes ad hoc en SQL ou via dbplyr, sans tout charger en memoire.
+# WHAT THE DATABASE BRINGS THAT A TSV CANNOT
+#   * types (a coordinate is a DOUBLE, not the string "500,5");
+#   * constraints: landmark within 1..25, a single point per (specimen,
+#     landmark), status within a closed vocabulary, strictly positive scale;
+#   * a relational model: record / specimen / observation;
+#   * ad hoc queries in SQL or through dbplyr, without loading everything into
+#     memory.
 #
-# CE QU'ELLE N'APPORTE PAS, ET QU'IL FAUT CODER : la plausibilite MORPHOMETRIQUE.
-# Un jeu de coordonnees peut satisfaire toutes les contraintes SQL et decrire un
-# poisson impossible. fishmorph_validate() confronte donc chaque specimen a
-# l'enveloppe empirique des 9556 especes du referentiel (voir .FM_RATIO_BOUNDS).
+# WHAT IT DOES NOT BRING, AND WHAT HAS TO BE CODED: MORPHOMETRIC plausibility. A
+# set of coordinates can satisfy every SQL constraint and describe an impossible
+# fish. fishmorph_validate() therefore confronts each specimen with the
+# empirical envelope of the 9,556 reference species (see .FM_RATIO_BOUNDS).
 #
-# ARCHIVAGE : un fichier .duckdb n'est pas un format de depot. Le format sur
-# disque de DuckDB n'est garanti retrocompatible que depuis la version 1.0, et un
-# depot type Zenodo attend du texte brut ou du Parquet. On exporte donc
-# systematiquement, et ce sont ces exports qui sont citables.
+# ARCHIVING: a .duckdb file is not a repository format. DuckDB's on-disk format
+# is only guaranteed backward compatible from version 1.0 onwards, and a
+# repository such as Zenodo expects plain text or Parquet. We therefore export
+# systematically, and it is those exports that are citable.
 #
-# DEPENDANCES : duckdb, DBI. fishmorph_landmark_store.R doit etre charge.
+# DEPENDENCIES: duckdb, DBI. fishmorph_landmark_store.R must be loaded.
 # =============================================================================
 
 
-# --- enveloppe empirique des proportions FISHMORPH ---------------------------
-# Quantiles 0.1 % et 99.9 % du rapport segment/Bl, calcules sur FishMORPH_seg.csv
-# (n = 6492 a 7706 especes selon le segment, valeurs strictement positives). Ce
-# sont des bornes de PLAUSIBILITE, pas de validite : un ratio hors enveloppe
-# signale un specimen a REGARDER, pas un specimen a rejeter -- une espece
-# reellement atypique (anguilliforme, poisson-lune) peut legitimement en sortir.
-# D'ou la severite "avertissement" et non "erreur".
+# --- empirical envelope of the FISHMORPH proportions -------------------------
+# 0.1 % and 99.9 % quantiles of the segment/Bl ratio, computed on
+# FishMORPH_seg.csv (n = 6,492 to 7,706 species depending on the segment,
+# strictly positive values). These are bounds of PLAUSIBILITY, not of validity:
+# a ratio outside the envelope flags a specimen to LOOK AT, not a specimen to
+# reject -- a genuinely atypical species (eel-like, sunfish) may legitimately
+# fall outside it. Hence the "warning" severity rather than "error".
 .FM_RATIO_BOUNDS <- data.frame(
   segment = c("Bd", "Hd", "Eh2", "Mo2", "PFi2", "PFl", "Ed", "Jl", "CPd", "CFd"),
   a       = c( 3L,   5L,   7L,    1L,    10L,    10L,   13L,  1L,   16L,   18L),
@@ -61,10 +63,10 @@
 )
 
 .FM_DDL <- c(
-# `mode` et `ts` sont NULLABLES a dessein : un journal ecrit par une version
-# anterieure peut ne pas les porter. Mieux vaut enregistrer "provenance inconnue"
-# que refuser la donnee ou, pire, lui inventer une valeur plausible. Le CHECK
-# reste en place pour interdire toute valeur HORS vocabulaire.
+# `mode` and `ts` are NULLABLE on purpose: a journal written by an earlier
+# version may not carry them. Better to record "unknown provenance" than to
+# refuse the data or, worse, invent a plausible value for it. The CHECK stays in
+# place to forbid any value OUTSIDE the vocabulary.
 "CREATE TABLE record (
    record_id    VARCHAR PRIMARY KEY,
    ts           TIMESTAMP,
@@ -84,9 +86,9 @@
    mm_per_px    DOUBLE  CHECK (mm_per_px IS NULL OR mm_per_px > 0),
    record_id    VARCHAR NOT NULL
  )",
-# Le PRIMARY KEY composite est la contrainte qui compte : il rend structurellement
-# impossible d'avoir deux fois le meme point pour un specimen, ce qu'aucun format
-# tabulaire large ne peut garantir.
+# The composite PRIMARY KEY is the constraint that matters: it makes it
+# structurally impossible to have the same point twice for one specimen, which
+# no wide tabular format can guarantee.
 "CREATE TABLE landmark_obs (
    specimen_id  VARCHAR  NOT NULL,
    landmark     SMALLINT NOT NULL CHECK (landmark BETWEEN 1 AND 25),
@@ -100,21 +102,21 @@
 
 .fm_sql_str <- function(x) paste0("'", gsub("'", "''", x), "'")
 
-# --- construction ------------------------------------------------------------
+# --- building ----------------------------------------------------------------
 
-#' Reconstruit la base DuckDB a partir des journaux
+#' Rebuild the DuckDB database from the journals
 #'
-#' Idempotent : deux appels successifs donnent la meme base. La base precedente
-#' est ecrasee (c'est un artefact derive), jamais mise a jour en place.
+#' Idempotent: two successive calls give the same database. The previous
+#' database is overwritten (it is a derived artefact), never updated in place.
 #'
-#' @param journal_dir Dossier des journaux (ou data.frame long deja lu).
-#' @param db_path Chemin du fichier .duckdb. NULL -> pas de base sur disque, tout
-#'   se fait en memoire (utile pour valider sans rien ecrire).
-#' @param export_dir Dossier d'export Parquet + CSV. NULL -> pas d'export.
-#' @param validate TRUE -> lance fishmorph_validate() et joint le rapport.
-#' @param stop_on_error TRUE -> interrompt si des anomalies de severite "erreur"
-#'   sont detectees, AVANT d'ecrire quoi que ce soit.
-#' @return Liste invisible : `db_path`, `n_specimens`, `n_points`, `issues`.
+#' @param journal_dir Journal directory (or an already-read long data.frame).
+#' @param db_path Path of the .duckdb file. NULL -> no database on disk,
+#'   everything happens in memory (useful to validate without writing anything).
+#' @param export_dir Directory for the Parquet + CSV export. NULL -> no export.
+#' @param validate TRUE -> run fishmorph_validate() and attach the report.
+#' @param stop_on_error TRUE -> abort if anomalies of severity "error" are
+#'   detected, BEFORE writing anything.
+#' @return An invisible list: `db_path`, `n_specimens`, `n_points`, `issues`.
 #' @export
 fishmorph_build_db <- function(journal_dir,
                                db_path    = NULL,
@@ -122,37 +124,37 @@ fishmorph_build_db <- function(journal_dir,
                                validate   = TRUE,
                                stop_on_error = FALSE) {
   for (p in c("DBI", "duckdb")) if (!requireNamespace(p, quietly = TRUE))
-    stop("Le package '", p, "' est requis (install.packages(\"", p, "\")).",
+    stop("Package '", p, "' is required (install.packages(\"", p, "\")).",
          call. = FALSE)
   if (!exists("fishmorph_consolidate", mode = "function"))
-    stop("fishmorph_landmark_store.R n'est pas charge.", call. = FALSE)
+    stop("fishmorph_landmark_store.R is not loaded.", call. = FALSE)
 
   K <- suppressWarnings(fishmorph_consolidate(journal_dir, long = TRUE,
                                               drop_na_points = FALSE))
   if (!nrow(K)) {
     if (!is.data.frame(journal_dir)) fm_journal_status(journal_dir)
-    stop("Aucun enregistrement exploitable : rien a mettre en base.\n",
-         "  Le journal est cree au LANCEMENT de l'app, mais ne se remplit qu'au ",
-         "premier 'Enregistrer & suivant'.\n",
-         "  Digitalise au moins un specimen, puis relance fishmorph_build_db().",
+    stop("No usable record: nothing to put into the database.\n",
+         "  The journal is created when the app is LAUNCHED, but only fills up ",
+         "at the first 'Enregistrer & suivant'.\n",
+         "  Digitize at least one specimen, then run fishmorph_build_db() again.",
          call. = FALSE)
   }
 
   issues <- if (isTRUE(validate)) fishmorph_validate(K) else NULL
-  n_err <- if (is.null(issues)) 0L else sum(issues$severite == "erreur")
+  n_err <- if (is.null(issues)) 0L else sum(issues$severity == "error")
   if (n_err > 0L) {
-    msg <- sprintf("%d anomalie(s) de severite 'erreur' detectee(s).", n_err)
+    msg <- sprintf("%d anomaly(ies) of severity 'error' detected.", n_err)
     if (isTRUE(stop_on_error))
-      stop(msg, " Base non construite. Inspecte le rapport : ",
+      stop(msg, " Database not built. Inspect the report: ",
            "fishmorph_validate(journal_dir).", call. = FALSE)
-    warning(msg, " La base est construite quand meme ; consulte $issues.",
+    warning(msg, " The database is built all the same; see $issues.",
             call. = FALSE)
   }
 
   num <- function(v) suppressWarnings(as.numeric(v))
   int <- function(v) suppressWarnings(as.integer(num(v)))
-  # horodatage : le journal ecrit de l'ISO 8601 UTC suffixe 'Z', que strptime ne
-  # sait pas lire tel quel -> on retire le Z et on force le fuseau.
+  # Timestamp: the journal writes ISO 8601 UTC with a 'Z' suffix, which strptime
+  # cannot read as such -> the Z is removed and the time zone forced.
   ts  <- as.POSIXct(strptime(sub("Z$", "", K$timestamp), "%Y-%m-%dT%H:%M:%OS",
                              tz = "UTC"), tz = "UTC")
 
@@ -166,37 +168,38 @@ fishmorph_build_db <- function(journal_dir,
     img_w = int(K$img_w), img_h = int(K$img_h),
     ruler_mm = num(K$ruler_mm), mm_per_px = num(K$mm_per_px),
     record_id = K$record_id, stringsAsFactors = FALSE), "specimen_id")
-  spe$species[is.na(spe$species) | !nzchar(spe$species)] <- "(inconnu)"
+  spe$species[is.na(spe$species) | !nzchar(spe$species)] <- "(unknown)"
   obs <- data.frame(
     specimen_id = K$row_key, landmark = int(K$landmark),
     x = num(K$x), y = num(K$y), status = K$status, stringsAsFactors = FALSE)
   obs <- obs[!is.na(obs$landmark), , drop = FALSE]
   obs <- obs[!duplicated(obs[, c("specimen_id", "landmark")]), , drop = FALSE]
 
-  # Mise en conformite AVANT insertion : une contrainte violee ferait echouer tout
-  # le lot avec un message peu parlant. On corrige donc explicitement, en le
-  # signalant -- et sans jamais inventer de valeur : ce qui est inconnu devient
-  # NULL, ce qui est hors vocabulaire est ramene au seul statut defendable.
+  # Brought into compliance BEFORE insertion: one violated constraint would make
+  # the whole batch fail with an unhelpful message. We therefore correct
+  # explicitly, and say so -- without ever inventing a value: what is unknown
+  # becomes NULL, what is outside the vocabulary falls back to the only
+  # defensible status.
   bad_mode <- !is.na(rec$mode) & !rec$mode %in% c("reconstruct", "correct", "new")
   if (any(bad_mode)) {
-    warning(sum(bad_mode), " enregistrement(s) au mode inconnu -> NULL.", call. = FALSE)
+    warning(sum(bad_mode), " record(s) with an unknown mode -> NULL.", call. = FALSE)
     rec$mode[bad_mode] <- NA_character_
   }
   rec$mode[!nzchar(rec$mode %||% "") & !is.na(rec$mode)] <- NA_character_
   if (any(is.na(rec$ts)))
-    warning(sum(is.na(rec$ts)), " enregistrement(s) sans horodatage lisible.",
+    warning(sum(is.na(rec$ts)), " record(s) without a readable timestamp.",
             call. = FALSE)
   no_op <- is.na(rec$operator) | !nzchar(rec$operator)
-  if (any(no_op)) rec$operator[no_op] <- "(inconnu)"
+  if (any(no_op)) rec$operator[no_op] <- "(unknown)"
 
   bad_st <- !obs$status %in% .FM_JOURNAL_STATUS
   if (any(bad_st)) {
-    warning(sum(bad_st), " observation(s) au statut inconnu -> 'na'.", call. = FALSE)
+    warning(sum(bad_st), " observation(s) with an unknown status -> 'na'.", call. = FALSE)
     obs$status[bad_st] <- "na"
   }
 
-  # base ecrite dans un fichier TEMPORAIRE puis basculee : si la construction
-  # echoue a mi-parcours, la base precedente reste intacte.
+  # The database is written to a TEMPORARY file then switched over: should the
+  # build fail half way, the previous database stays intact.
   final <- db_path
   if (!is.null(db_path)) {
     dir.create(dirname(db_path), recursive = TRUE, showWarnings = FALSE)
@@ -218,13 +221,13 @@ fishmorph_build_db <- function(journal_dir,
   DBI::dbAppendTable(con, "landmark_obs", obs)
   if (!is.null(issues) && nrow(issues)) DBI::dbWriteTable(con, "qc_issue", issues)
 
-  # DuckDB n'applique pas les cles etrangeres avec la rigueur de PostgreSQL : on
-  # verifie donc l'integrite referentielle EXPLICITEMENT, plutot que de supposer
-  # qu'une contrainte declaree suffit.
+  # DuckDB does not enforce foreign keys with PostgreSQL's rigour: referential
+  # integrity is therefore checked EXPLICITLY, rather than assuming that a
+  # declared constraint is enough.
   orph <- DBI::dbGetQuery(con,
     "SELECT COUNT(*) AS n FROM landmark_obs o
       WHERE NOT EXISTS (SELECT 1 FROM specimen s WHERE s.specimen_id = o.specimen_id)")$n
-  if (orph > 0) warning(orph, " observation(s) sans specimen correspondant.",
+  if (orph > 0) warning(orph, " observation(s) with no matching specimen.",
                         call. = FALSE)
 
   .fm_create_views(con, sort(unique(obs$landmark)))
@@ -241,17 +244,17 @@ fishmorph_build_db <- function(journal_dir,
                               file.rename(final, prev) }
     if (!file.rename(db_path, final)) {
       if (file.exists(prev)) file.rename(prev, final)
-      stop("Bascule de la base echouee : ", final, call. = FALSE)
+      stop("Switching the database over failed: ", final, call. = FALSE)
     }
-    message("Base construite : ", final, " (", n_sp, " specimens, ", n_pt, " points)")
+    message("Database built: ", final, " (", n_sp, " specimens, ", n_pt, " points)")
   }
   invisible(list(db_path = final, n_specimens = n_sp, n_points = n_pt,
                  issues = issues))
 }
 
-# vues : tableau large + ratios morphometriques. Elles sont RECALCULEES a chaque
-# requete, donc jamais desynchronisees des observations -- contrairement a une
-# colonne "Bd" figee dans un classeur.
+# Views: wide table + morphometric ratios. They are RECOMPUTED at every query,
+# hence never out of step with the observations -- unlike a "Bd" column frozen
+# in a workbook.
 .fm_create_views <- function(con, pts) {
   sel <- paste(vapply(pts, function(p) sprintf(
     '  MAX(CASE WHEN o.landmark = %d THEN o.x END) AS "%d_X",
@@ -276,8 +279,8 @@ fishmorph_build_db <- function(journal_dir,
  FROM (SELECT *, %s AS Bl_px FROM v_landmarks_wide)
  WHERE Bl_px > 0", rat, d(1L, 2L)))
 
-  # etat de saisie : combien de points restent a leur position de graine, donc
-  # jamais verifies a l'oeil. Invisible dans un tableau de coordonnees.
+  # State of the entry: how many points are still at their seed position, hence
+  # never checked by eye. Invisible in a table of coordinates.
   DBI::dbExecute(con,
 "CREATE OR REPLACE VIEW v_specimen_qc AS
  SELECT s.specimen_id, s.species, s.photo_file,
@@ -286,7 +289,7 @@ fishmorph_build_db <- function(journal_dir,
         COUNT(*) FILTER (WHERE o.status = 'seeded')  AS n_seeded,
         COUNT(*) FILTER (WHERE o.status = 'derived') AS n_derived,
         COUNT(*) FILTER (WHERE o.status = 'na')      AS n_na,
-        s.mm_per_px IS NOT NULL AS a_echelle
+        s.mm_per_px IS NOT NULL AS has_scale
  FROM specimen s
  JOIN record r USING (record_id)
  JOIN landmark_obs o USING (specimen_id)
@@ -300,49 +303,50 @@ fishmorph_build_db <- function(journal_dir,
   cp <- function(what, file, fmt)
     DBI::dbExecute(con, sprintf("COPY (SELECT * FROM %s) TO %s (FORMAT %s)",
                                 what, .fm_sql_str(file.path(export_dir, file)), fmt))
-  # Parquet : typé, compresse, colonnaire -> l'artefact de depot.
+  # Parquet: typed, compressed, columnar -> the repository artefact.
   cp("landmark_obs",     "landmark_obs.parquet",  "parquet")
   cp("specimen",         "specimen.parquet",      "parquet")
   cp("v_landmarks_wide", "landmarks_wide.parquet", "parquet")
   cp("v_ratios",         "ratios.parquet",        "parquet")
-  # CSV : redondant avec le Parquet, mais lisible dans trente ans sans logiciel.
+  # CSV: redundant with the Parquet, but readable in thirty years with no
+  # software at all.
   cp("v_landmarks_wide", "landmarks_wide.csv", "csv, HEADER")
   cp("v_ratios",         "ratios.csv",         "csv, HEADER")
-  message("Exports ecrits dans : ", export_dir)
+  message("Exports written to: ", export_dir)
   invisible(TRUE)
 }
 
-#' Ouvre la base (en lecture seule par defaut)
+#' Open the database (read-only by default)
 #'
-#' La lecture seule est le mode normal : la base est derivee, on ne doit jamais y
-#' ecrire a la main. Elle permet aussi a plusieurs processus R d'ouvrir le meme
-#' fichier simultanement.
+#' Read-only is the normal mode: the database is derived, and must never be
+#' written to by hand. It also lets several R processes open the same file
+#' simultaneously.
 #' @export
 fishmorph_db_connect <- function(db_path, read_only = TRUE) {
   for (p in c("DBI", "duckdb")) if (!requireNamespace(p, quietly = TRUE))
-    stop("Le package '", p, "' est requis.", call. = FALSE)
-  if (!file.exists(db_path)) stop("Base introuvable : ", db_path, call. = FALSE)
+    stop("Package '", p, "' is required.", call. = FALSE)
+  if (!file.exists(db_path)) stop("Database not found: ", db_path, call. = FALSE)
   DBI::dbConnect(duckdb::duckdb(), dbdir = db_path, read_only = read_only)
 }
 
 # --- validation --------------------------------------------------------------
 
-#' Controle structurel ET morphometrique
+#' Structural AND morphometric control
 #'
-#' Les contraintes SQL garantissent la coherence du CONTENANT ; cette fonction
-#' interroge la plausibilite du CONTENU. Un jeu de coordonnees peut satisfaire
-#' toutes les contraintes et decrire un poisson impossible.
+#' The SQL constraints guarantee the coherence of the CONTAINER; this function
+#' questions the plausibility of the CONTENT. A set of coordinates can satisfy
+#' every constraint and describe an impossible fish.
 #'
-#' Severites : "erreur" = incoherence certaine (point hors de l'image, points
-#' confondus, axe degenere) ; "avertissement" = a regarder (proportion hors de
-#' l'enveloppe des 9556 especes) ; "info" = tracabilite (point non verifie,
-#' declare non mesurable, absence d'echelle).
+#' Severities: "error" = certain inconsistency (point outside the image,
+#' coincident points, degenerate axis); "warning" = to be looked at (proportion
+#' outside the envelope of the 9,556 species); "info" = traceability (point
+#' never checked, declared non-measurable, no scale bar).
 #'
-#' @param x Dossier de journaux, ou data.frame long (sortie de
+#' @param x A journal directory, or a long data.frame (the output of
 #'   `fishmorph_consolidate(long = TRUE)`).
-#' @param expect Points attendus pour un specimen complet.
-#' @param bounds Enveloppe des ratios (defaut : [.FM_RATIO_BOUNDS]).
-#' @return data.frame : specimen_id, species, photo_file, severite, probleme,
+#' @param expect Points expected for a complete specimen.
+#' @param bounds Envelope of the ratios (default: [.FM_RATIO_BOUNDS]).
+#' @return data.frame: specimen_id, species, photo_file, severity, problem,
 #'   landmark, detail.
 #' @export
 fishmorph_validate <- function(x, expect = c(1:19, 22L, 23L),
@@ -354,7 +358,7 @@ fishmorph_validate <- function(x, expect = c(1:19, 22L, 23L),
     if (!length(sp) || !nrow(sp)) return(invisible())
     out[[length(out) + 1L]] <<- data.frame(
       specimen_id = sp$row_key, species = sp$species, photo_file = sp$photo_file,
-      severite = sev, probleme = pb, landmark = lm, detail = detail,
+      severity = sev, problem = pb, landmark = lm, detail = detail,
       stringsAsFactors = FALSE)
   }
   if (!nrow(K)) return(do.call(rbind, out) %||% .fm_issue_empty())
@@ -365,50 +369,50 @@ fishmorph_validate <- function(x, expect = c(1:19, 22L, 23L),
   K$img_w <- suppressWarnings(as.numeric(K$img_w))
   K$img_h <- suppressWarnings(as.numeric(K$img_h))
 
-  # 1. coordonnee hors des bornes de l'image -> clic egare ou photo remplacee.
-  #    Tolerance de 1 % : un point peut legitimement froler le bord.
+  # 1. coordinate outside the bounds of the image -> stray click or replaced
+  #    photograph. Tolerance of 1 %: a point may legitimately graze the edge.
   tol <- 0.01
-  hors <- K[is.finite(K$x) & is.finite(K$y) & is.finite(K$img_w) & is.finite(K$img_h) &
+  outside <- K[is.finite(K$x) & is.finite(K$y) & is.finite(K$img_w) & is.finite(K$img_h) &
             (K$x < -tol * K$img_w | K$x > (1 + tol) * K$img_w |
              K$y < -tol * K$img_h | K$y > (1 + tol) * K$img_h), , drop = FALSE]
-  if (nrow(hors)) add(hors, "erreur", "point hors de l'image", hors$landmark,
-                      sprintf("(%.0f, %.0f) pour une image %.0fx%.0f",
-                              hors$x, hors$y, hors$img_w, hors$img_h))
+  if (nrow(outside)) add(outside, "error", "point outside the image", outside$landmark,
+                      sprintf("(%.0f, %.0f) for an image of %.0fx%.0f",
+                              outside$x, outside$y, outside$img_w, outside$img_h))
 
   by_sp <- split(K, K$row_key)
   for (g in by_sp) {
     m <- g[1, , drop = FALSE]
     fin <- g[is.finite(g$x) & is.finite(g$y) & !(g$status %in% "na"), , drop = FALSE]
 
-    # 2. deux landmarks distincts exactement au meme pixel = clic manque
+    # 2. two distinct landmarks at exactly the same pixel = a missed click
     if (nrow(fin) > 1) {
       k <- paste(round(fin$x, 1), round(fin$y, 1))
       dup <- unique(k[duplicated(k)])
       for (kk in dup) {
         lm <- sort(fin$landmark[k == kk])
-        add(m, "erreur", "points confondus", lm[1],
-            paste("points", paste(lm, collapse = "+"), "au meme pixel"))
+        add(m, "error", "coincident points", lm[1],
+            paste("points", paste(lm, collapse = "+"), "at the same pixel"))
       }
     }
-    # 3. points attendus absents
+    # 3. expected points absent
     miss <- setdiff(expect, g$landmark)
-    if (length(miss)) add(m, "avertissement", "point absent", miss[1],
-                          paste("manquants :", paste(miss, collapse = ",")))
-    # 4. tracabilite de la saisie
+    if (length(miss)) add(m, "warning", "point absent", miss[1],
+                          paste("missing:", paste(miss, collapse = ",")))
+    # 4. traceability of the entry
     sd_ <- g$landmark[g$status %in% "seeded" & g$landmark %in% expect]
-    if (length(sd_)) add(m, "info", "point jamais verifie", sd_[1],
-                         paste("restes a la graine :", paste(sort(sd_), collapse = ",")))
+    if (length(sd_)) add(m, "info", "point never checked", sd_[1],
+                         paste("still at the seed:", paste(sort(sd_), collapse = ",")))
     aj_ <- g$landmark[g$status %in% "adjusted" & g$landmark %in% expect]
-    if (length(aj_)) add(m, "info", "point recale par convention", aj_[1],
-                         paste("extremes 3/4 corriges :", paste(sort(aj_), collapse = ",")))
+    if (length(aj_)) add(m, "info", "point snapped by a convention", aj_[1],
+                         paste("extremes 3/4 corrected:", paste(sort(aj_), collapse = ",")))
     na_ <- g$landmark[g$status %in% "na" & g$landmark %in% expect]
-    if (length(na_)) add(m, "info", "point non mesurable", na_[1],
-                         paste("declares NA :", paste(sort(na_), collapse = ",")))
+    if (length(na_)) add(m, "info", "point not measurable", na_[1],
+                         paste("declared NA:", paste(sort(na_), collapse = ",")))
     if (!any(is.finite(suppressWarnings(as.numeric(m$mm_per_px)))))
-      add(m, "info", "pas de barre d'echelle", NA_integer_,
-          "coordonnees en pixels uniquement")
+      add(m, "info", "no scale bar", NA_integer_,
+          "coordinates in pixels only")
 
-    # 5. plausibilite morphometrique, referee a l'enveloppe FISHMORPH
+    # 5. morphometric plausibility, referred to the FISHMORPH envelope
     P <- matrix(NA_real_, 25, 2)
     ok <- g$landmark >= 1 & g$landmark <= 25 & !is.na(g$landmark)
     P[g$landmark[ok], 1] <- g$x[ok]; P[g$landmark[ok], 2] <- g$y[ok]
@@ -416,21 +420,21 @@ fishmorph_validate <- function(x, expect = c(1:19, 22L, 23L),
       sqrt(sum((P[b, ] - P[a, ])^2)) else NA_real_
     Bl <- dd(1L, 2L)
     if (!is.finite(Bl) || Bl <= 0) {
-      add(m, "erreur", "axe du corps degenere", NA_integer_,
-          "LM1 et LM2 confondus ou absents : aucune echelle relative possible")
+      add(m, "error", "degenerate body axis", NA_integer_,
+          "LM1 and LM2 coincident or absent: no relative scale is possible")
       next
     }
     for (i in seq_len(nrow(bounds))) {
       r <- dd(bounds$a[i], bounds$b[i]) / Bl
       if (!is.finite(r)) next
       if (r < bounds$lo[i] || r > bounds$hi[i])
-        add(m, "avertissement", "proportion hors enveloppe", bounds$a[i],
-            sprintf("%s/Bl = %.3f hors [%.3f ; %.3f] (mediane %.3f)",
+        add(m, "warning", "proportion outside the envelope", bounds$a[i],
+            sprintf("%s/Bl = %.3f outside [%.3f ; %.3f] (median %.3f)",
                     bounds$segment[i], r, bounds$lo[i], bounds$hi[i], bounds$med[i]))
     }
   }
   res <- if (length(out)) do.call(rbind, out) else .fm_issue_empty()
-  sev <- factor(res$severite, levels = c("erreur", "avertissement", "info"))
+  sev <- factor(res$severity, levels = c("error", "warning", "info"))
   res <- res[order(sev, res$specimen_id), , drop = FALSE]
   rownames(res) <- NULL
   res
@@ -438,29 +442,29 @@ fishmorph_validate <- function(x, expect = c(1:19, 22L, 23L),
 
 .fm_issue_empty <- function() data.frame(
   specimen_id = character(0), species = character(0), photo_file = character(0),
-  severite = character(0), probleme = character(0), landmark = integer(0),
+  severity = character(0), problem = character(0), landmark = integer(0),
   detail = character(0), stringsAsFactors = FALSE)
 
 # -----------------------------------------------------------------------------
-# Utilisation
+# Use
 # -----------------------------------------------------------------------------
 # library(Rfishmorph)
 #
 # jdir <- "FishMORPH/landmark_journal"
 #
-# # (1) Reconstruire la base + les exports d'archivage. A relancer aussi souvent
-# #     qu'on veut : c'est un artefact derive, jamais une mise a jour en place.
+# # (1) Rebuild the database + the archival exports. To be run as often as you
+# #     like: it is a derived artefact, never an in-place update.
 # res <- fishmorph_build_db(jdir,
 #          db_path    = "FishMORPH/fishmorph.duckdb",
 #          export_dir = "FishMORPH/exports")
-# subset(res$issues, severite == "erreur")
+# subset(res$issues, severity == "error")
 #
-# # (2) Valider SANS rien ecrire (avant de decider) :
+# # (2) Validate WITHOUT writing anything (before deciding):
 # iss <- fishmorph_validate(jdir)
-# table(iss$severite, iss$probleme)
+# table(iss$severity, iss$problem)
 #
-# # (3) Interroger. Exemple : specimens dont l'oeil sort de l'enveloppe, ou dont
-# #     plus de 3 points n'ont jamais ete verifies.
+# # (3) Query. For instance: specimens whose eye falls outside the envelope, or
+# #     more than 3 of whose points have never been checked.
 # con <- fishmorph_db_connect("FishMORPH/fishmorph.duckdb")
 # DBI::dbGetQuery(con, "
 #   SELECT r.specimen_id, r.species, r.Ed, q.n_seeded
@@ -468,11 +472,11 @@ fishmorph_validate <- function(x, expect = c(1:19, 22L, 23L),
 #   WHERE r.Ed > 0.1386 OR q.n_seeded > 3
 #   ORDER BY q.n_seeded DESC")
 #
-# # ... ou en dplyr, sans SQL :
+# # ... or in dplyr, without SQL:
 # # dplyr::tbl(con, "v_ratios") |> dplyr::filter(Bd > 0.5) |> dplyr::collect()
 # DBI::dbDisconnect(con, shutdown = TRUE)
 #
-# # (4) Repartir des exports sans aucun moteur (Parquet ou CSV) :
+# # (4) Start again from the exports with no engine at all (Parquet or CSV):
 # # arrow::read_parquet("FishMORPH/exports/landmarks_wide.parquet")
 # # read.csv("FishMORPH/exports/landmarks_wide.csv")
 # -----------------------------------------------------------------------------

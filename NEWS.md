@@ -1,8 +1,91 @@
+# Rfishmorph 0.4.0
+
+## The eye vertical is checked, in order
+
+* The save-time check now also verifies the ORDER of the six points that the
+  FISHMORPH conventions place on one vertical -- 5, 13, 7, 14, 6, 8, from the
+  back downwards: top of the head, top of the eye, centre of the eye, bottom of
+  the eye, bottom of the head, body underside. Two things are tested and they
+  are not the same statement: that **5 tops the group** (the `Hd` analogue of
+  the 3/4 rule for `Bd`), and that **every consecutive pair is in order**, which
+  catches a local swap the first test cannot see.
+* This is the failure no other check catches, because each pair stays
+  internally consistent: with 13 and 14 exchanged -- the eye clicked
+  bottom-first -- `Ed` (13-14) keeps its exact length while `Eh` (7-8) silently
+  refers to the wrong edge of the eye. Nothing in a coordinate table shows it.
+* Settled on the data, as the `Bd` rule was. Over the 4,151 species already
+  digitized in the workbook, the expected order holds for **99.5 %** of them:
+  8 above 6 in 22 specimens (0.53 %), 13 above 5 in 10 (0.24 %, the same ten as
+  "5 does not top the group"), 6 above 14 in 2, 14 above 7 in 1. A convention
+  that a hand-digitized corpus already satisfies to that degree is a convention,
+  not a preference, and the residue is worth looking at one specimen at a time.
+* An inversion is reported but **never corrected automatically**: moving a point
+  to satisfy the order would invent a measurement rather than repair one. The
+  dialog therefore offers *Measure again* (which selects and zooms on the point
+  found on the wrong side, not the reference it was compared with) and *Save
+  without correcting*; the *Correct automatically* button only appears when
+  there is an extreme-point violation, which is the only kind that can be
+  repaired by moving a landmark.
+* Same tolerance as the extremes, `max(5 px, 0.003 * Bl)`, and the same
+  invariance: heights are read perpendicular to the body axis and the dorsal
+  side from the relative position of 3 and 4, so the test holds head left or
+  right, photograph flipped, or mirrored. Missing points are stepped over rather
+  than breaking the chain.
+* New internals `.fm_eye_order_violations()` and `.fm_convention_violations()`;
+  the violation tables gain a `kind` column (`"extreme"` / `"order"`).
+
+## A tabbed, themed digitizer
+
+* The side panel of `launch_fishmorph_digitizer()` is a **tabset** — `Specimen`,
+  `Display`, `Checks`, `Seed` — instead of one long scroll. The controls
+  fall into groups touched at different rhythms (once per specimen, once per
+  photograph, once per session), and stacking them in one column put the ones
+  used constantly below the ones used never.
+* With `bslib` (already in `Suggests`) the page uses a Bootstrap 5 theme, cards
+  and a wider sidebar; without it, the same content falls back to the standard
+  Shiny layout. No feature depends on `bslib`, only the appearance does. The
+  page is deliberately **not** `fillable`: it is a document that scrolls, and in
+  a filling page the 620 px photograph is squeezed by the bars above and the
+  panels below.
+* The **queue selector** (`To reconstruct` / `Correct existing` / `New
+  photographs`) moves from the action bar to the head of the side panel: it decides
+  what the whole session is doing, and it sat one button away from
+  "Save & next". `Mark NA` moves the other way, next to the landmark bar,
+  with the zoom controls: those act on the point under the cursor.
+* The **landmark bar is bare and on one line** — the buttons share the width
+  rather than wrapping, so a given point keeps its place on screen whatever the
+  window size. The entry order, the broken-axis conventions and the colour code
+  move to a card at the foot of the page: they are read on the first specimen
+  and never again, but above the photograph they cost three lines of scroll on
+  each of the following thousands.
+* A header strip shows what the session IS — workbook, photographs, journal,
+  operator — since those are arguments of the launcher and are not editable from
+  the app. The `Checks` tab shows the state of both write layers.
+
+## Every point is written, and a lost one is now loud
+
+* Verified end to end: `save_pts = 1..19, 22, 23, 24, 25` for the landmark sheet
+  (and `+ 20, 21` for new specimens), the columns `24_X`..`25_Y` being created at
+  start-up by `ensure_cols()`. Over the 201 records of the existing journals,
+  every record carries its 23 points: 22 `placed` 201/201, 23 `derived` 165 (36
+  `na`, the derivation needing 6 and 9), 24 `placed` 196, 25 `placed` 9 — the
+  hinges being optional by design.
+* The on-screen legend claimed **"24/25 are NOT recorded"**, which had
+  been untrue since the hinge columns were added. An operator reading it had
+  every reason not to bother placing them. Corrected, and the legend now states
+  what is written and why: the hinges are not landmarks and belong in no shape
+  analysis, but they define the frames each convention was applied in — without
+  them a species reopened for correction comes back with a straight axis.
+* Writing a point whose column is missing from the sheet used to `next` in
+  silence. It now raises a persistent error naming the points, since a
+  hand-edited sheet is the one case where a placed point could vanish without
+  trace (the journal, as always, still has it).
+
 # Rfishmorph 0.3.0
 
 ## Extreme-point convention checked on save
 
-* `launch_fishmorph_digitizer()` now verifies, when "Enregistrer & suivant" is
+* `launch_fishmorph_digitizer()` now verifies, when "Save & next" is
   pressed, that landmark 3 is the most **dorsal** and landmark 4 the most
   **ventral** point of the body outline — the definition of `Bd` as the maximum
   body depth. A specimen whose 5 (head top) sits above 3, or whose 6 (head
@@ -16,7 +99,7 @@
 * Heights are measured perpendicular to the body axis 1-2, so a tilted
   photograph does not bias the test, and the dorsal side is inferred from the
   relative position of 3 and 4 — the check therefore holds whatever the
-  orientation (head left or right, flipped photograph, "Inverser dorsal/ventral"
+  orientation (head left or right, flipped photograph, "Flip dorsal/ventral"
   ticked). Caudal peduncle and fin (16-19) and appendage tips (12 pectoral,
   15 jaw) are excluded, as are the scale bar (20, 21), the derived point (23)
   and the hinges (24, 25). Tolerance: 0.003 of body length.
@@ -34,7 +117,7 @@
   compliant T-26 specimens top out at -0.4 px of overshoot (p98) while the
   smallest real breach is 11.8 px, so any floor from 1 to 8 px flags the same
   16 specimens.
-* The check is toggled by the new "Verifier 3/4 (extremes) a l'enregistrement"
+* The check is toggled by the new "Check 3/4 (extremes) on save"
   box (on by default).
 * New journal status **`"adjusted"`** for points relocated by that automatic
   correction, distinct from `"placed"` (operator-pointed) and `"seeded"`

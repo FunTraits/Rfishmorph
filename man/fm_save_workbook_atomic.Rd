@@ -2,30 +2,29 @@
 % Please edit documentation in R/journal.R
 \name{fm_save_workbook_atomic}
 \alias{fm_save_workbook_atomic}
-\title{Ecriture ATOMIQUE d'un classeur openxlsx}
+\title{ATOMIC write of an openxlsx workbook}
 \usage{
 fm_save_workbook_atomic(wb, path, keep_prev = TRUE)
 }
 \arguments{
-\item{wb}{Objet openxlsx.}
+\item{wb}{An openxlsx object.}
 
-\item{path}{Chemin cible.}
+\item{path}{Target path.}
 
-\item{keep_prev}{Conserver la generation precedente (defaut TRUE).}
+\item{keep_prev}{Keep the previous generation (default TRUE).}
 }
 \value{
-TRUE (invisible) si l'ecriture a abouti.
+TRUE (invisibly) if the write succeeded.
 }
 \description{
-\code{saveWorkbook()} ecrase le fichier cible en place : pendant la reecriture (des
-secondes pour un classeur de plusieurs Mo) le fichier est dans un etat
-intermediaire, et une interruption le detruit. On ecrit donc dans un fichier
-temporaire du MEME dossier -- condition necessaire pour que le renommage soit
-atomique, un renommage inter-volumes etant en realite une copie -- puis on
-bascule par renommage.
+\code{saveWorkbook()} overwrites its target in place: while it is being rewritten
+(seconds, for a workbook of several Mb) the file is in an intermediate state,
+and an interruption destroys it. We therefore write to a temporary file in
+the SAME directory -- a necessary condition for the rename to be atomic, a
+cross-volume rename being in fact a copy -- then switch by renaming.
 }
 \details{
-L'ancien fichier n'est pas supprime mais deplace en "\if{html}{\out{<nom>}}.prev.xlsx", ce qui
-fournit une sauvegarde d'une generation pour un cout nul. En cas d'echec du
-renommage final, l'ancien fichier est restaure.
+The old file is not deleted but moved to "\if{html}{\out{<name>}}.prev.xlsx", which gives a
+one-generation backup at no cost. Should the final rename fail, the old file
+is restored.
 }

@@ -2,30 +2,30 @@
 % Please edit documentation in R/database.R
 \name{fishmorph_validate}
 \alias{fishmorph_validate}
-\title{Controle structurel ET morphometrique}
+\title{Structural AND morphometric control}
 \usage{
 fishmorph_validate(x, expect = c(1:19, 22L, 23L), bounds = .FM_RATIO_BOUNDS)
 }
 \arguments{
-\item{x}{Dossier de journaux, ou data.frame long (sortie de
+\item{x}{A journal directory, or a long data.frame (the output of
 \code{fishmorph_consolidate(long = TRUE)}).}
 
-\item{expect}{Points attendus pour un specimen complet.}
+\item{expect}{Points expected for a complete specimen.}
 
-\item{bounds}{Enveloppe des ratios (defaut : \link{.FM_RATIO_BOUNDS}).}
+\item{bounds}{Envelope of the ratios (default: \link{.FM_RATIO_BOUNDS}).}
 }
 \value{
-data.frame : specimen_id, species, photo_file, severite, probleme,
+data.frame: specimen_id, species, photo_file, severity, problem,
 landmark, detail.
 }
 \description{
-Les contraintes SQL garantissent la coherence du CONTENANT ; cette fonction
-interroge la plausibilite du CONTENU. Un jeu de coordonnees peut satisfaire
-toutes les contraintes et decrire un poisson impossible.
+The SQL constraints guarantee the coherence of the CONTAINER; this function
+questions the plausibility of the CONTENT. A set of coordinates can satisfy
+every constraint and describe an impossible fish.
 }
 \details{
-Severites : "erreur" = incoherence certaine (point hors de l'image, points
-confondus, axe degenere) ; "avertissement" = a regarder (proportion hors de
-l'enveloppe des 9556 especes) ; "info" = tracabilite (point non verifie,
-declare non mesurable, absence d'echelle).
+Severities: "error" = certain inconsistency (point outside the image,
+coincident points, degenerate axis); "warning" = to be looked at (proportion
+outside the envelope of the 9,556 species); "info" = traceability (point
+never checked, declared non-measurable, no scale bar).
 }

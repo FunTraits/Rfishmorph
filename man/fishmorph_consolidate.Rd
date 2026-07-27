@@ -2,7 +2,7 @@
 % Please edit documentation in R/journal.R
 \name{fishmorph_consolidate}
 \alias{fishmorph_consolidate}
-\title{Reconstruit la base analysable a partir des journaux}
+\title{Rebuild the analysable table from the journals}
 \usage{
 fishmorph_consolidate(
   journal_dir,
@@ -13,22 +13,22 @@ fishmorph_consolidate(
 )
 }
 \arguments{
-\item{journal_dir}{Dossier des journaux, ou data.frame deja lu.}
+\item{journal_dir}{Journal directory, or an already-read data.frame.}
 
-\item{long}{TRUE -> renvoie le format long retenu (une ligne par point) au lieu
-du tableau large.}
+\item{long}{TRUE -> return the long format kept (one row per point) instead
+of the wide table.}
 
-\item{drop_na_points}{TRUE (defaut) -> les points marques "na" sortent en NA.
-FALSE -> leurs coordonnees eventuelles sont conservees.}
+\item{drop_na_points}{TRUE (default) -> points marked "na" come out as NA.
+FALSE -> whatever coordinates they carry are kept.}
 
-\item{out_csv, out_xlsx}{Chemins d'export optionnels (l'xlsx exige openxlsx).}
+\item{out_csv, out_xlsx}{Optional export paths (the xlsx one requires openxlsx).}
 }
 \value{
-data.frame large : une ligne par cle, colonnes \verb{<n>_X} / \verb{<n>_Y}.
+A wide data.frame: one row per key, columns \verb{<n>_X} / \verb{<n>_Y}.
 }
 \description{
-Pour chaque cle (\code{row_key}), seul le DERNIER enregistrement est retenu --
-horodatage maximal, \code{record_id} maximal en cas d'egalite. Les enregistrements
-anterieurs restent dans les journaux : ils constituent l'historique des
-corrections, consultable via \code{\link[=fm_journal_history]{fm_journal_history()}}, et ne sont jamais perdus.
+For each key (\code{row_key}), only the LAST record is kept -- maximum timestamp,
+maximum \code{record_id} in case of a tie. Earlier records stay in the journals:
+they are the history of corrections, readable through \code{\link[=fm_journal_history]{fm_journal_history()}},
+and they are never lost.
 }

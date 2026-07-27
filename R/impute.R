@@ -36,8 +36,8 @@ load_fishmorph_phylogeny <- function() {
   tree
 }
 
-# Cache de session : la table des axes phylogenetiques est lue une seule fois
-# par session R. Environnement vide en parent pour ne rien capturer d'autre.
+# Session cache: the table of phylogenetic axes is read once per R session.
+# An empty parent environment, so that nothing else is captured.
 .fm_cache <- new.env(parent = emptyenv())
 
 #' Precomputed phylogenetic PCoA axes for the FISHMORPH species pool
@@ -92,8 +92,8 @@ load_fishmorph_phylo_axes <- function(file = NULL, k = NULL, refresh = FALSE) {
     ax <- .fm_cache[[key]]
   } else {
     if (is.null(file)) {
-      # .rds d'abord (compresse), .txt ensuite : le second permet de repartir de
-      # la source brute si le binaire est illisible sur une plateforme donnee.
+      # .rds first (compressed), .txt next: the second makes it possible to
+      # start again from the raw source if the binary is unreadable on a given
       for (nm in c("pcoaPhylogenyFish.rds", "pcoaPhylogenyFish.txt")) {
         cand <- system.file("extdata", "Phylogeny", nm, package = "Rfishmorph")
         if (nzchar(cand) && file.exists(cand)) { file <- cand; break }
@@ -111,10 +111,10 @@ load_fishmorph_phylo_axes <- function(file = NULL, k = NULL, refresh = FALSE) {
       if (!is.data.frame(raw))
         stop("The .rds file did not contain a data frame: ", file, call. = FALSE)
     } else {
-      # header a une colonne de MOINS que les lignes de donnees -> read.table
-      # promeut automatiquement la 1re colonne en noms de lignes (format ecrit
-      # par write.table()). On ne force donc pas `row.names`, qui casserait un
-      # fichier ecrit avec une colonne d'especes nommee.
+      # platform. A header with one column FEWER than the data rows -> read.table
+      # automatically promotes the 1st column to row names (the format written
+      # by write.table()). `row.names` is therefore not forced, which would
+      # break a file written with a named species column.
       raw <- utils::read.table(file, header = TRUE, check.names = FALSE,
                                stringsAsFactors = FALSE)
     }
@@ -248,28 +248,28 @@ print.fishmorph_phylopcoa <- function(x, ...) {
   invisible(x)
 }
 
-# Axes phylogenetiques diffuses sur un vecteur `groups`.
+# Phylogenetic axes broadcast over a `groups` vector.
 #
-# Source par defaut : la TABLE PRECALCULEE sur les 8970 especes
-# (load_fishmorph_phylo_axes()). Elle est preferee au calcul depuis l'arbre pour
-# deux raisons, dont la seconde est la plus importante :
-#   1. cout -- l'eigendecomposition d'une matrice patristique 8970 x 8970 est
-#      cubique, et serait refaite a chaque appel ;
-#   2. COMPARABILITE -- des axes recalcules sur le sous-ensemble d'especes
-#      present dans les donnees definissent un repere DIFFERENT a chaque analyse.
-#      Deux imputations sur deux sous-ensembles ne vivraient pas dans le meme
-#      espace phylogenetique. La table fixe fait des axes une propriete de la
-#      phylogenie, non du jeu de donnees courant.
+# Default source: the table PRECOMPUTED on the 8,970 species
+# (load_fishmorph_phylo_axes()). It is preferred to computing from the tree for
+# two reasons, of which the second matters most:
+#   1. cost -- the eigendecomposition of an 8,970 x 8,970 patristic matrix is
+#      cubic, and would be redone at every call;
+#   2. COMPARABILITY -- axes recomputed on the subset of species present in the
+#      data define a DIFFERENT frame at every analysis. Two imputations on two
+#      subsets would not live in the same phylogenetic space. The fixed table
+#      makes the axes a property of the phylogeny, not of the data set at hand.
+#
 #
 # Un `tree` explicitement fourni signifie que l'appelant veut SON arbre : on
-# recalcule alors via phylo_pcoa(), comme avant. La table sert aussi de repli
-# inverse si elle est introuvable.
+# recomputed through phylo_pcoa(), as before. The table also serves as the
+# reverse fallback when the tree cannot be found.
 .phylo_axes_for_species <- function(species, tree = NULL, k_phylo = 10,
                                     axes = NULL) {
   if (is.null(species))
     return(list(axes = NULL, reason = "no `species` supplied", n_matched = 0L,
                 k_used = 0L, source = NA_character_))
-  groups <- species                       # nom historique dans le corps ci-dessous
+  groups <- species                       # the historical name in the body below
   canon_groups <- .canon_species_name(as.character(species))
   n_sp <- length(unique(canon_groups[!is.na(canon_groups)]))
 
@@ -312,7 +312,7 @@ print.fishmorph_phylopcoa <- function(x, ...) {
     return(broadcast(ax, "supplied tree"))
   }
 
-  # 3. defaut : table precalculee ; repli sur l'arbre embarque
+  # 3. default: the precomputed table; fallback on the bundled tree
   ax <- tryCatch(load_fishmorph_phylo_axes(), error = function(e) e)
   if (!inherits(ax, "error")) {
     res <- broadcast(ax, "precomputed axis table")
@@ -333,11 +333,11 @@ print.fishmorph_phylopcoa <- function(x, ...) {
 # trait-matrix NA handling (port of intraitR:::.apply_na_action). Returns the
 # (possibly imputed / row-subset) matrix and a `keep` mask.
 # `groups`  : predicteur CATEGORIEL optionnel (et cle de "impute_group_mean").
-# `species` : identifiant d'espece par LIGNE, servant uniquement a retrouver les
+# `species`: the species identifier per ROW, used only to look the axes up.
 #             axes phylogenetiques. Les deux etaient confondus : "missforest_phylo"
-#             exigeait alors un `groups`, alors que la phylogenie n'a pas besoin
-#             d'un facteur de regroupement alimentant la foret, seulement de
-#             savoir a quelle espece correspond chaque ligne.
+#             then required a `groups`, whereas the phylogeny needs no grouping
+#             factor feeding the forest, only to know which species each row
+#             corresponds to.
 .apply_na_action <- function(X, groups, na_action, missforest_ntree = 100,
                              missforest_maxiter = 10, context = "traits",
                              tree = NULL, missforest_phylo_k = 10,
@@ -396,8 +396,8 @@ print.fishmorph_phylopcoa <- function(x, ...) {
     grp_note <- ""
     if (!is.null(groups)) {
       # randomForest refuse un facteur de plus de 53 modalites. Un `groups` egal
-      # aux especes (des milliers de niveaux) ferait donc echouer missForest --
-      # raison de plus pour ne PAS y verser automatiquement les especes.
+      # to the species (thousands of levels) would therefore make missForest
+      # fail -- one more reason NOT to pour the species into it automatically.
       g <- factor(groups)
       if (nlevels(g) > 53L) {
         warning("`groups` has ", nlevels(g), " levels; randomForest cannot use ",
@@ -419,8 +419,8 @@ print.fishmorph_phylopcoa <- function(x, ...) {
                 pax$reason, "); falling back to plain \"missforest\".", call. = FALSE)
       } else {
         df_for_rf <- cbind(df_for_rf, pax$axes)
-        # la SOURCE des axes est tracee : deux imputations n'ont de sens
-        # comparees que si elles reposent sur le meme repere phylogenetique.
+        # the SOURCE of the axes is traced: two imputations are only comparable
+        # if they rest on the same phylogenetic frame.
         phylo_note <- sprintf(
           ", augmented with %d phylogenetic PCoA axis/axes from the %s (%d species matched)",
           pax$k_used, pax$source, pax$n_matched)
@@ -488,14 +488,14 @@ impute_traits <- function(data, cols = fishmorph_segment_names(),
   data <- as.data.frame(data)
   cols <- intersect(cols, names(data))
   if (!length(cols)) stop("None of `cols` found in `data`.", call. = FALSE)
-  # `species` est detecte automatiquement ; `groups` ne l'est PAS. Les remplir
-  # tous deux avec la colonne d'especes revenait a passer un facteur de plusieurs
-  # milliers de niveaux a randomForest, qui en refuse plus de 53.
+  # `species` is detected automatically; `groups` is NOT. Filling both with the
+  # species column amounted to handing randomForest a factor of several thousand
+  # levels, and it refuses more than 53.
   if (is.null(species)) {
     sc <- intersect(c("Genus.species", "species", "Species"), names(data))[1]
     if (!is.na(sc)) species <- data[[sc]]
   }
-  # pour les moyennes par groupe, l'espece EST le groupe : repli explicite.
+  # for the group means, the species IS the group: an explicit fallback.
   if (is.null(groups) && method == "impute_group_mean") groups <- species
   grp_f <- if (!is.null(groups)) factor(groups) else NULL
   X <- as.matrix(data[cols]); storage.mode(X) <- "double"
@@ -582,8 +582,8 @@ impute_landmarks <- function(landmarks,
     stop("`landmarks` must contain at least 21 landmarks (FISHMORPH scheme); found ",
          p, ".", call. = FALSE)
 
-  # `species` : colonne `species` des metadonnees, sinon les NOMS DE SPECIMENS
-  # (3e dimension du tableau de coordonnees), qui sont deja des noms d'especes en
+  # `species`: the `species` column of the metadata, otherwise the SPECIMEN
+  # NAMES (3rd dimension of the coordinate array), which are already species
   # modes reconstruct/correct. Detecte independamment de `groups`.
   if (is.null(species)) {
     if (is_fishmorph_landmarks(landmarks) && !is.null(landmarks$metadata) &&

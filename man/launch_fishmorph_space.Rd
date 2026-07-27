@@ -2,38 +2,38 @@
 % Please edit documentation in R/space-app.R
 \name{launch_fishmorph_space}
 \alias{launch_fishmorph_space}
-\title{Explorateur de l'espace morphologique des poissons d'eau douce}
+\title{Morphological space explorer for freshwater fishes}
 \usage{
 launch_fishmorph_space(data = NULL, launch.browser = TRUE, ...)
 }
 \arguments{
-\item{data}{Chemin d'un CSV de traits (separateur point-virgule) remplacant le
-jeu embarque. Utile pour travailler sur une version plus recente, ou sur le
-resultat de \code{\link[=fishmorph_build_db]{fishmorph_build_db()}} exporte en CSV. NULL utilise le jeu
-embarque dans le package.}
+\item{data}{Path to a trait CSV (semicolon-separated) replacing the bundled
+data set. Useful to work on a more recent version, or on the result of
+\code{\link[=fishmorph_build_db]{fishmorph_build_db()}} exported to CSV. \code{NULL} uses the data set bundled
+with the package.}
 
-\item{launch.browser}{Ouvrir dans le navigateur par defaut.}
+\item{launch.browser}{Open in the default browser.}
 
-\item{...}{Passe a \code{\link[shiny:runApp]{shiny::runApp()}} (par exemple \code{port}).}
+\item{...}{Passed to \code{\link[shiny:runApp]{shiny::runApp()}} (for example \code{port}).}
 }
 \value{
-Invisiblement \code{NULL} ; appelee pour son effet de bord.
+Invisibly \code{NULL}; called for its side effect.
 }
 \description{
-Lance l'application 'shiny' qui explore l'espace morphologique global des
-poissons d'eau douce a partir de la base FISHMORPH (Brosse et al. 2021) :
-analyse en composantes principales des neuf traits sans dimension, densite de
-l'espace fonctionnel, coloration par ordre ou par statut IUCN, et projection
-d'un jeu d'especes fourni par l'utilisateur.
+Launches the 'shiny' application that explores the global morphological space
+of freshwater fishes from the FISHMORPH database (Brosse et al. 2021):
+principal component analysis of the nine dimensionless traits, density of the
+functional space, colouring by order or by IUCN status, and projection of a
+user-supplied set of species.
 }
 \examples{
 \dontrun{
 launch_fishmorph_space()
-launch_fishmorph_space(data = "mes_traits.csv")
+launch_fishmorph_space(data = "my_traits.csv")
 }
 }
 \seealso{
-\code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} pour produire les landmarks,
-\code{\link[=project_fishmorph]{project_fishmorph()}} pour projeter des specimens par le calcul plutot
-qu'interactivement.
+\code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} to produce the landmarks,
+\code{\link[=project_fishmorph]{project_fishmorph()}} to project specimens by computation rather than
+interactively.
 }

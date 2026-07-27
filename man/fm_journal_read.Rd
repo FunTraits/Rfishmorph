@@ -2,18 +2,18 @@
 % Please edit documentation in R/journal.R
 \name{fm_journal_read}
 \alias{fm_journal_read}
-\title{Lit et concatene tous les journaux d'un dossier}
+\title{Read and concatenate every journal in a directory}
 \usage{
 fm_journal_read(journal_dir)
 }
 \arguments{
-\item{journal_dir}{Dossier des journaux (ou vecteur de dossiers).}
+\item{journal_dir}{Journal directory (or a vector of directories).}
 }
 \value{
-Un data.frame LONG, une ligne par point et par enregistrement.
+A LONG data.frame, one row per point and per record.
 }
 \description{
-Tolerant par construction : une derniere ligne tronquee par un crash est
-ecartee (colonnes obligatoires manquantes), et un journal ecrit par une version
-anterieure (moins de colonnes) est complete par des NA.
+Tolerant by construction: a last line truncated by a crash is discarded
+(mandatory columns missing), and a journal written by an earlier version
+(fewer columns) is filled with NA.
 }

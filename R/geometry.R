@@ -118,18 +118,17 @@ standardize_geometry <- function(x, orient = TRUE, rescale = FALSE,
   uc <- P[2, ] - P[1, ]; Lc <- sqrt(sum(uc^2))
   if (!is.finite(Lc) || Lc == 0) return(P)
   uc <- uc / Lc
-  axof <- function(i) sum((P[i, ] - P[1, ]) * uc)     # abscisse le long de la corde 1-2
+  axof <- function(i) sum((P[i, ] - P[1, ]) * uc)     # abscissa along the 1-2 chord
 
-  # Une charniere ne peut etre un point INTERMEDIAIRE de l'axe que si elle se
-  # projette STRICTEMENT entre le museau (abscisse 0) et la base caudale (Lc).
-  # Une charniere laissee a une position par defaut, heritee d'un autre specimen
-  # ou posee de travers sur un poisson tres courbe peut se projeter EN DEHORS de
-  # cet intervalle. La conserver rendait `axc` non monotone, et findInterval()
-  # echouait avec "'vec' must be sorted non-decreasingly and not contain NAs".
-  # On l'ecarte donc, plutot que de la ramener de force sur l'axe : une charniere
-  # aberrante n'est pas une information a corriger, c'est une information a
-  # ignorer. Le specimen est alors redresse avec les charnieres restantes, ou
-  # laisse tel quel s'il n'en reste aucune.
+  # A hinge can only be an INTERMEDIATE point of the axis if it projects
+  # STRICTLY between the snout (abscissa 0) and the caudal base (Lc). A hinge
+  # left at a default position, inherited from another specimen, or placed
+  # askew on a strongly curved fish may project OUTSIDE that interval. Keeping
+  # it made `axc` non-monotonic, and findInterval() failed with "'vec' must be
+  # sorted non-decreasingly and not contain NAs". It is therefore discarded
+  # rather than forced back onto the axis: an aberrant hinge is not information
+  # to correct, it is information to ignore. The specimen is then straightened
+  # with the remaining hinges, or left as it is if none remain.
   axh <- vapply(hs, axof, numeric(1))
   keep <- is.finite(axh) & axh > 0 & axh < Lc
   n_drop <- sum(!keep)
@@ -141,14 +140,14 @@ standardize_geometry <- function(x, orient = TRUE, rescale = FALSE,
   u1 <- P[chain[2L], ] - P[1, ]; L1 <- sqrt(sum(u1^2))
   if (!is.finite(L1) || L1 == 0) return(structure(P, hinges_ignored = n_drop))
   u1 <- u1 / L1
-  # positions redressees des points de la chaine (le long de u1, arc conserve)
+  # straightened positions of the chain points (along u1, arc length preserved)
   S <- matrix(NA_real_, length(chain), 2L); S[1, ] <- P[1, ]
   for (k in 2:length(chain))
     S[k, ] <- S[k - 1L, ] + sqrt(sum((P[chain[k], ] - P[chain[k - 1L], ])^2)) * u1
-  # Construit a partir des valeurs deja filtrees et triees, et non recalcule :
-  # axof(1) vaut 0 et axof(2) vaut Lc par definition de uc. cummax() absorbe en
-  # plus les egalites a l'epsilon pres, de sorte que `axc` est non decroissant
-  # PAR CONSTRUCTION -- la precondition de findInterval ne peut plus etre violee.
+  # Built from the values already filtered and sorted, not recomputed: axof(1)
+  # is 0 and axof(2) is Lc by definition of uc. cummax() further absorbs
+  # equalities to within an epsilon, so that `axc` is non-decreasing BY
+  # CONSTRUCTION -- findInterval's precondition can no longer be violated.
   axc <- cummax(c(0, axh, Lc))
   Pout <- P
   for (j in seq_len(npt)) {
@@ -305,15 +304,15 @@ correct_geometry_conventions <- function(x, tolerance_coord = 1e-6,
     }
     co[, , i] <- .apply_conventions_matrix(P, tolerance_coord)
   }
-  # Un avertissement AGREGE, et non un par specimen : sur une base de plusieurs
-  # milliers d'individus, une alerte par ligne serait ignoree. Ces specimens ont
-  # ete traites, simplement avec moins de charnieres que prevu.
+  # An AGGREGATED warning, and not one per specimen: over a database of several
+  # thousand individuals, one alert per row would be ignored. These specimens
+  # were processed, simply with fewer hinges than expected.
   if (length(dropped))
-    warning(length(dropped), " specimen(s) avec au moins une charniere (22/24/25) ",
-            "se projetant hors du segment museau -> base caudale : elle a ete ",
-            "ignoree pour le redressement. Premiers concernes : ",
+    warning(length(dropped), " specimen(s) with at least one hinge (22/24/25) ",
+            "projecting outside the snout -> caudal-base segment: it was ",
+            "ignored when straightening. First affected: ",
             paste(utils::head(sp[dropped], 5), collapse = ", "),
-            ". Verifiez ces points dans launch_fishmorph_digitizer(mode = \"correct\").",
+            ". Check those points in launch_fishmorph_digitizer(mode = \"correct\").",
             call. = FALSE)
   fishmorph_landmarks(co, metadata = x$metadata, scale = x$scale)
 }

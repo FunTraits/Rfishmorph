@@ -2,28 +2,28 @@
 % Please edit documentation in R/shiny-reconstructor.R
 \name{launch_fishmorph_reconstructor}
 \alias{launch_fishmorph_reconstructor}
-\title{Lance l'outil de reconstruction (deprecie)}
+\title{Launch the reconstruction tool (deprecated)}
 \usage{
 launch_fishmorph_reconstructor(segments_csv = NULL, ...)
 }
 \arguments{
-\item{segments_csv}{Ignore. Conserve pour ne pas casser les appels existants.}
+\item{segments_csv}{Ignored. Kept so that existing calls do not break.}
 
-\item{...}{Passe a \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}}.}
+\item{...}{Passed to \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}}.}
 }
 \value{
-Invisiblement \code{NULL}.
+Invisibly \code{NULL}.
 }
 \description{
-Depuis la version 0.2.0, l'outil de digitalisation est
-\code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}}, qui travaille directement sur le classeur
-FISHMORPH, gere trois files de travail (reconstruire, corriger, nouvelles
-photos) et securise chaque enregistrement par un journal append-only.
+Since version 0.2.0 the digitizing tool is \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}},
+which works directly on the FISHMORPH workbook, handles three working queues
+(reconstruct, correct, new photographs) and secures every record with an
+append-only journal.
 }
 \details{
-L'ancien prototype ne prenait qu'une photo a la fois et exportait un CSV
-isole : il n'existe pas de correspondance exacte entre ses arguments et ceux
-du nouvel outil, qui exige un classeur. Cette fonction avertit puis redirige.
+The former prototype took one photograph at a time and exported an isolated
+CSV: there is no exact correspondence between its arguments and those of the
+new tool, which requires a workbook. This function warns, then redirects.
 }
 \seealso{
 \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}}

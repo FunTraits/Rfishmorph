@@ -2,20 +2,20 @@
 % Please edit documentation in R/journal.R
 \name{fm_journal_status}
 \alias{fm_journal_status}
-\title{Etat des journaux d'un dossier}
+\title{State of the journals in a directory}
 \usage{
 fm_journal_status(journal_dir)
 }
 \arguments{
-\item{journal_dir}{Dossier des journaux.}
+\item{journal_dir}{Journal directory.}
 }
 \value{
-data.frame : fichier, octets, n_lignes, n_records, n_points, periode.
+data.frame: file, bytes, n_lines, n_records, n_points, period.
 }
 \description{
-A appeler en PREMIER quand une consolidation renvoie un resultat vide : dit
-immediatement si le dossier est le bon, quels fichiers s'y trouvent, et
-combien d'enregistrements chacun contient. Un journal a 0 enregistrement est
-le cas normal d'une session ouverte puis fermee sans avoir rien enregistre :
-l'app cree le fichier au LANCEMENT, pas au premier "Enregistrer".
+To be called FIRST whenever a consolidation returns an empty result: it says
+immediately whether the directory is the right one, which files are in it,
+and how many records each contains. A journal with 0 records is the normal
+state of a session opened then closed without saving anything: the app
+creates the file at LAUNCH, not at the first "Enregistrer".
 }

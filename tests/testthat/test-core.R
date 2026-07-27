@@ -51,35 +51,35 @@ test_that("landmark I/O round-trips through CSV", {
 })
 
 # ---------------------------------------------------------------------------
-# Non-regression : une charniere (22/24/25) se projetant HORS du segment
-# museau -> base caudale rendait le vecteur d'abscisses non monotone, et
-# findInterval() echouait avec "'vec' must be sorted non-decreasingly".
+# Non-regression: a hinge (22/24/25) projecting OUTSIDE the snout -> caudal-base
+# segment made the vector of abscissas non-monotonic, and findInterval() failed
+# with "'vec' must be sorted non-decreasingly".
 # ---------------------------------------------------------------------------
 .mk_fish <- function(hinges = list()) {
   P <- matrix(NA_real_, 25, 2, dimnames = list(NULL, c("X", "Y")))
-  P[1, ] <- c(0, 0); P[2, ] <- c(500, 0)          # axe museau -> caudale
-  P[3, ] <- c(250, -60); P[4, ] <- c(250, 60)     # profondeur du corps
-  P[5, ] <- c(80, -40);  P[6, ] <- c(80, 40)      # tete
+  P[1, ] <- c(0, 0); P[2, ] <- c(500, 0)          # snout -> caudal axis
+  P[3, ] <- c(250, -60); P[4, ] <- c(250, 60)     # body depth
+  P[5, ] <- c(80, -40);  P[6, ] <- c(80, 40)      # head
   for (nm in names(hinges)) P[as.integer(nm), ] <- hinges[[nm]]
   fishmorph_landmarks(P, specimen = "sp", pad_to = 25L)
 }
 
 test_that("correct_geometry_conventions survives an out-of-range hinge", {
-  # charniere en AMONT du museau (abscisse negative)
-  amont <- .mk_fish(list("22" = c(-30, -10)))
-  expect_warning(r1 <- correct_geometry_conventions(amont), "charniere")
+  # hinge UPSTREAM of the snout (negative abscissa)
+  upstream <- .mk_fish(list("22" = c(-30, -10)))
+  expect_warning(r1 <- correct_geometry_conventions(upstream), "hinge")
   expect_s3_class(r1, "fishmorph_landmarks")
   expect_true(all(is.finite(r1$coords[1:6, , 1])))
 
-  # charniere AU-DELA de la base caudale (abscisse > Lc)
-  apres <- .mk_fish(list("22" = c(250, -40), "24" = c(560, -20)))
-  expect_warning(r2 <- correct_geometry_conventions(apres), "charniere")
+  # hinge BEYOND the caudal base (abscissa > Lc)
+  beyond <- .mk_fish(list("22" = c(250, -40), "24" = c(560, -20)))
+  expect_warning(r2 <- correct_geometry_conventions(beyond), "hinge")
   expect_s3_class(r2, "fishmorph_landmarks")
 
-  # les deux : aucune charniere exploitable, le specimen passe quand meme
+  # both: no usable hinge at all, the specimen still goes through
   expect_warning(
     r3 <- correct_geometry_conventions(
-      .mk_fish(list("22" = c(-30, -10), "24" = c(560, -20)))), "charniere")
+      .mk_fish(list("22" = c(-30, -10), "24" = c(560, -20)))), "hinge")
   expect_s3_class(r3, "fishmorph_landmarks")
 })
 
@@ -89,13 +89,13 @@ test_that("valid hinges are still used, and none triggers a warning", {
   expect_warning(a <- correct_geometry_conventions(droit),  regexp = NA)
   expect_warning(b <- correct_geometry_conventions(courbe), regexp = NA)
 
-  # le poisson deja droit n'est pas deplace : LM1 reste a l'origine
+  # a fish already straight is not moved: LM1 stays at the origin
   expect_equal(unname(a$coords[1, , 1]), c(0, 0), tolerance = 1e-8)
 
-  # Le redressement ALIGNE la chaine 1 -> 22 -> 24 -> 2 sur la direction du
-  # PREMIER segment (1 -> 22) ; l'axe resultant n'est donc pas horizontal, et
-  # tester b$coords[2, 2, 1] == 0 serait faux. La propriete a verifier est la
-  # colinearite : le produit vectoriel de deux segments consecutifs s'annule.
+  # Straightening ALIGNS the chain 1 -> 22 -> 24 -> 2 on the direction of the
+  # FIRST segment (1 -> 22); the resulting axis is therefore not horizontal, and
+  # testing b$coords[2, 2, 1] == 0 would be wrong. The property to check is
+  # collinearity: the cross product of two consecutive segments vanishes.
   cross <- function(M, i, j, k)
     (M[j, 1] - M[i, 1]) * (M[k, 2] - M[i, 2]) -
     (M[j, 2] - M[i, 2]) * (M[k, 1] - M[i, 1])
@@ -104,8 +104,8 @@ test_that("valid hinges are still used, and none triggers a warning", {
   expect_lt(abs(cross(M, 1L, 22L, 24L)) / scale_px^2, 1e-8)
   expect_lt(abs(cross(M, 1L, 24L,  2L)) / scale_px^2, 1e-8)
 
-  # le redressement conserve la LONGUEUR D'ARC : la corde 1-2 redressee vaut la
-  # somme des trois segments de l'axe brise d'origine.
+  # straightening preserves the ARC LENGTH: the straightened chord 1-2 equals
+  # the sum of the three segments of the original broken axis.
   O <- courbe$coords[, , 1]
   arc <- sqrt(sum((O[22, ] - O[1, ])^2)) + sqrt(sum((O[24, ] - O[22, ])^2)) +
          sqrt(sum((O[2, ] - O[24, ])^2))
@@ -113,9 +113,9 @@ test_that("valid hinges are still used, and none triggers a warning", {
 })
 
 test_that("a fish without any hinge is returned unchanged by unbending", {
-  sans <- .mk_fish()
-  expect_silent(r <- correct_geometry_conventions(sans))
-  expect_equal(r$coords[1, , 1], sans$coords[1, , 1], tolerance = 1e-8)
+  plain <- .mk_fish()
+  expect_silent(r <- correct_geometry_conventions(plain))
+  expect_equal(r$coords[1, , 1], plain$coords[1, , 1], tolerance = 1e-8)
 })
 
 # ---------------------------------------------------------------------------
@@ -129,9 +129,9 @@ test_that("load_fishmorph_phylo_axes reads the bundled table", {
   expect_gt(nrow(ax), 8000L)
   expect_false(anyDuplicated(ax$species) > 0L)
   expect_true(all(vapply(ax[-1], is.numeric, logical(1))))
-  # les noms sont canonises : Genus_species, jamais d'espace ni de point
+  # names are canonicalised: Genus_species, never a space nor a dot
   expect_false(any(grepl("[ .]", ax$species)))
-  # axes ordonnes par valeur propre decroissante -> variance decroissante
+  # axes ordered by decreasing eigenvalue -> decreasing variance
   sds <- vapply(ax[-1], stats::sd, numeric(1))
   expect_true(all(diff(sds) < 1e-8))
 })
@@ -149,10 +149,10 @@ test_that("phylo axes are broadcast to a groups vector without recomputing", {
   pax <- Rfishmorph:::.phylo_axes_for_species(sp, k_phylo = 4)
   expect_equal(pax$source, "precomputed axis table")
   expect_equal(pax$k_used, 4L)
-  expect_equal(nrow(pax$axes), length(sp))         # une ligne par element
-  # point/espace/underscore sont equivalents : memes axes pour la meme espece
+  expect_equal(nrow(pax$axes), length(sp))         # one row per element
+  # dot/space/underscore are equivalent: same axes for the same species
   expect_equal(pax$axes[1, ], pax$axes[3, ], ignore_attr = TRUE)
-  # espece absente -> NA, et non une erreur
+  # species absent -> NA, and not an error
   expect_true(all(is.na(pax$axes[5, ])))
   expect_equal(pax$n_matched, 2L)                  # nasus + grypus
 })
@@ -163,7 +163,7 @@ test_that("an explicit axis table takes precedence, and a bad one is reported", 
   pax <- Rfishmorph:::.phylo_axes_for_species(c("Coilia.nasus", "Aaptosyax.grypus"),
                                              k_phylo = 10, axes = fake)
   expect_equal(pax$source, "supplied axis table")
-  expect_equal(pax$k_used, 2L)                     # borne au nombre de colonnes
+  expect_equal(pax$k_used, 2L)                     # bounded by the number of columns
   expect_equal(unname(pax$axes[[1]]), c(1, 2))
 
   bad <- Rfishmorph:::.phylo_axes_for_species("Coilia.nasus",
@@ -177,9 +177,9 @@ test_that("missforest_phylo works WITHOUT groups (species come from the data)", 
   set.seed(1)
   ref <- load_fishmorph_reference("sample")
   ref$REs[1:5] <- NA; ref$BEl[6:8] <- NA
-  # aucun `groups` : l'espece est detectee seule et sert uniquement de cle
-  # pour cbind les axes phylogenetiques. C'est tout ce que missforest_phylo
-  # demande -- il n'y a aucun facteur de regroupement a fournir.
+  # no `groups`: the species is detected on its own and serves only as a key
+  # to cbind the phylogenetic axes. That is all missforest_phylo asks for --
+  # there is no grouping factor to supply.
   expect_warning(
     imp <- impute_traits(ref, cols = fishmorph_ratio_names(),
                          method = "missforest_phylo"),
@@ -190,11 +190,11 @@ test_that("missforest_phylo works WITHOUT groups (species come from the data)", 
 
 test_that("species and groups are independent arguments", {
   ref <- load_fishmorph_reference("sample")
-  # `species` explicite, sans aucun `groups`
+  # explicit `species`, with no `groups` at all
   pax <- Rfishmorph:::.phylo_axes_for_species(ref$Species, k_phylo = 5)
   expect_equal(pax$k_used, 5L)
   expect_equal(pax$n_matched, length(unique(ref$Species)))
-  # et sans especes du tout, on le dit clairement
+  # and with no species at all, we say so plainly
   none <- Rfishmorph:::.phylo_axes_for_species(NULL)
   expect_null(none$axes)
   expect_match(none$reason, "species")
@@ -205,7 +205,7 @@ test_that("a groups factor with too many levels is dropped, not fatal", {
   set.seed(2)
   ref <- load_fishmorph_reference("sample")
   ref$REs[1:3] <- NA
-  # 400 niveaux : randomForest en refuse plus de 53 -> avertissement, pas erreur
+  # 400 levels: randomForest refuses more than 53 -> a warning, not an error
   expect_warning(
     imp <- impute_traits(ref, cols = fishmorph_ratio_names(),
                          method = "missforest", groups = ref$Species),
