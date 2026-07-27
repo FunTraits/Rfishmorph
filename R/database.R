@@ -189,7 +189,7 @@ fishmorph_build_db <- function(journal_dir,
   no_op <- is.na(rec$operator) | !nzchar(rec$operator)
   if (any(no_op)) rec$operator[no_op] <- "(inconnu)"
 
-  bad_st <- !obs$status %in% c("placed", "seeded", "derived", "na")
+  bad_st <- !obs$status %in% .FM_JOURNAL_STATUS
   if (any(bad_st)) {
     warning(sum(bad_st), " observation(s) au statut inconnu -> 'na'.", call. = FALSE)
     obs$status[bad_st] <- "na"
@@ -398,6 +398,9 @@ fishmorph_validate <- function(x, expect = c(1:19, 22L, 23L),
     sd_ <- g$landmark[g$status %in% "seeded" & g$landmark %in% expect]
     if (length(sd_)) add(m, "info", "point jamais verifie", sd_[1],
                          paste("restes a la graine :", paste(sort(sd_), collapse = ",")))
+    aj_ <- g$landmark[g$status %in% "adjusted" & g$landmark %in% expect]
+    if (length(aj_)) add(m, "info", "point recale par convention", aj_[1],
+                         paste("extremes 3/4 corriges :", paste(sort(aj_), collapse = ",")))
     na_ <- g$landmark[g$status %in% "na" & g$landmark %in% expect]
     if (length(na_)) add(m, "info", "point non mesurable", na_[1],
                          paste("declares NA :", paste(sort(na_), collapse = ",")))

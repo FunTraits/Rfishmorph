@@ -36,8 +36,9 @@
 #   3. Les 20 points sont pre-places depuis les segments (longueurs
 #      verrouillees) ; on affine avec les curseurs (parametres non identifies)
 #      et, au besoin, en repositionnant un point precis au clic.
-#   4. "Enregistrer & suivant" ecrit les X/Y dans la copie et passe a la
-#      suivante.
+#   4. "Enregistrer & suivant" verifie la convention des extremes (3 = point le
+#      plus dorsal, 4 = le plus ventral : voir .fm_extreme_violations), puis
+#      ecrit les X/Y dans la copie et passe a la suivante.
 #
 # Calibration des segments (verifiee sur les lignes deja digitalisees) :
 #   paires euclidiennes = Bl(1,2) Bd(3,4) Hd(5,6) Ed(13,14) Jl(1,15)
@@ -344,6 +345,99 @@
 #   CAUDALE = segment 24 -> 2   : pedoncule (16-17), nageoire caudale (18-19)
 # Si une charniere n'est pas posee, repli gracieux vers la corde 1->2 (poisson
 # droit / correction) : comportement retro-compatible.
+# --- CONVENTION DES EXTREMES (3 = dos, 4 = ventre) ---------------------------
+# FISHMORPH definit Bd comme la profondeur MAXIMALE du corps : 3 doit donc etre
+# le point le plus DORSAL et 4 le point le plus VENTRAL du contour du corps. Un
+# 5 (haut de tete) au-dessus du 3, ou un 11 (ventre a la pectorale) sous le 4,
+# est une erreur de saisie qui sous-estime Bd.
+#
+# Points EXCLUS de la comparaison :
+#   16-19 : pedoncule et nageoire caudale -- hors du contour du corps par
+#           definition (demande explicite), la caudale depassant souvent Bd ;
+#   12, 15 : extremites de la pectorale et de la machoire -- appendices, qui
+#           depassent legitimement le contour ;
+#   20, 21 : barre d'echelle ; 23 : point derive ; 24, 25 : charnieres de saisie.
+# Restent donc compares a 3/4 : 1, 2, 5, 6, 7, 8, 9, 10, 11, 13, 14, 22.
+.FM_EXTREME_EXCLUDE <- c(12L, 15L, 16L, 17L, 18L, 19L, 20L, 21L, 23L, 24L, 25L)
+
+# tolerance par defaut, en FRACTION de la corde 1-2 : 0.3 % de Bl (soit ~6 px
+# pour un poisson de 2000 px). En deca, l'ecart releve du bruit de clic.
+.FM_EXTREME_TOL <- 0.003
+
+# libelles des points, pour les messages de l'application
+.FM_PT_LABELS <- c(
+  "1" = "museau", "2" = "base de la caudale", "3" = "dos (Bd sup.)",
+  "4" = "ventre (Bd inf.)", "5" = "haut de la tete (Hd sup.)",
+  "6" = "bas de la tete (Hd inf.)", "7" = "centre de l'oeil",
+  "8" = "ventre sous l'oeil", "9" = "ventre sous le museau",
+  "10" = "insertion de la pectorale", "11" = "ventre a la pectorale",
+  "12" = "extremite de la pectorale", "13" = "haut de l'oeil",
+  "14" = "bas de l'oeil", "15" = "extremite de la machoire",
+  "16" = "pedoncule sup.", "17" = "pedoncule inf.", "18" = "caudale sup.",
+  "19" = "caudale inf.", "20" = "echelle (debut)", "21" = "echelle (fin)",
+  "22" = "charniere du corps", "23" = "point derive 23")
+.fm_pt_label <- function(i) {
+  l <- unname(.FM_PT_LABELS[as.character(i)])
+  ifelse(is.na(l), "", paste0(" (", l, ")"))
+}
+
+# Coordonnees dans le repere du CORPS : abscisse le long de l'axe 1-2, hauteur
+# perpendiculaire a cet axe. On raisonne sur cette hauteur et non sur le Y brut
+# de l'image, car une photo inclinee fausserait la comparaison ; quand le poisson
+# est horizontal, les deux coincident exactement (au signe pres).
+#
+# `sgn` donne le cote DORSAL, deduit de la position relative de 3 et 4 et non
+# d'une convention d'image : le test est donc valable tete a gauche ou a droite,
+# photo retournee, ou case "Inverser dorsal/ventral" cochee.
+.fm_body_frame <- function(P) {
+  if (nrow(P) < 4L) return(NULL)
+  A <- P[1, ]; B <- P[2, ]
+  if (!all(is.finite(A)) || !all(is.finite(B))) return(NULL)
+  L <- sqrt(sum((B - A)^2)); if (!is.finite(L) || L == 0) return(NULL)
+  u <- (B - A) / L; n <- c(u[2], -u[1])
+  ax <- no <- rep(NA_real_, nrow(P))
+  for (i in seq_len(nrow(P))) if (all(is.finite(P[i, ]))) {
+    ax[i] <- sum((P[i, ] - A) * u); no[i] <- sum((P[i, ] - A) * n)
+  }
+  if (!is.finite(no[3]) || !is.finite(no[4]) || no[3] == no[4]) return(NULL)
+  list(A = A, u = u, n = n, L = L, ax = ax, no = no, sgn = sign(no[3] - no[4]))
+}
+
+# Violations de la convention des extremes. Renvoie NULL si tout est conforme,
+# sinon un data.frame : `point` (3 ou 4), `culprit` (le point qui le depasse),
+# `delta` (depassement en pixels).
+.fm_extreme_violations <- function(P, tol_frac = .FM_EXTREME_TOL) {
+  g <- .fm_body_frame(P); if (is.null(g)) return(NULL)
+  tol  <- max(1, tol_frac * g$L)
+  cand <- setdiff(seq_len(nrow(P)), c(3L, 4L, .FM_EXTREME_EXCLUDE))
+  cand <- cand[is.finite(g$no[cand])]
+  if (!length(cand)) return(NULL)
+  out <- list()
+  d <- g$sgn * (g$no[cand] - g$no[3])           # depassement du cote DORSAL
+  k <- which.max(d)
+  if (d[k] > tol) out[[length(out) + 1L]] <-
+    data.frame(point = 3L, culprit = cand[k], delta = unname(d[k]))
+  d <- g$sgn * (g$no[4] - g$no[cand])           # depassement du cote VENTRAL
+  k <- which.max(d)
+  if (d[k] > tol) out[[length(out) + 1L]] <-
+    data.frame(point = 4L, culprit = cand[k], delta = unname(d[k]))
+  if (!length(out)) return(NULL)
+  do.call(rbind, out)
+}
+
+# Correction automatique : 3 (resp. 4) prend la HAUTEUR du point qui le depasse,
+# en conservant son abscisse le long de l'axe. La convention "3-4 perpendiculaire
+# a l'axe" est donc preservee, et seul Bd change (il augmente).
+.fm_fix_extremes <- function(P, viol) {
+  g <- .fm_body_frame(P); if (is.null(g)) return(P)
+  for (r in seq_len(nrow(viol))) {
+    i <- viol$point[r]; j <- viol$culprit[r]
+    if (!is.finite(g$ax[i]) || !is.finite(g$no[j])) next
+    P[i, ] <- g$A + g$ax[i] * g$u + g$no[j] * g$n
+  }
+  P
+}
+
 .fm_constrain <- function(P, overridden = integer(0), pfl_px = NA_real_) {
   A <- P[1, ]; B <- P[2, ]; Lab <- sqrt(sum((B - A)^2))
   if (!is.finite(Lab) || Lab == 0) return(P)
@@ -453,6 +547,30 @@
 #' Les photographies restent EN LOCAL : elles ne sont jamais copiees dans le
 #' package ni dans le classeur, seuls leur nom de fichier et leurs dimensions en
 #' pixels sont enregistres. C'est `photo_dir` et `new_photo_dir` qui font le lien.
+#'
+#' @section Controle des extremes a l'enregistrement:
+#' FISHMORPH definit `Bd` comme la profondeur MAXIMALE du corps : le point 3 doit
+#' donc etre le plus dorsal et le point 4 le plus ventral. Quand la case
+#' *"Verifier 3/4 (extremes)"* est cochee (defaut), "Enregistrer & suivant"
+#' controle cette convention avant toute ecriture et, si elle est violee, propose
+#' de **remesurer** (le point fautif devient actif et la vue s'y centre), de
+#' **corriger automatiquement** (3, resp. 4, prend la hauteur du point qui le
+#' depasse, en gardant sa position le long de l'axe : `Bd` augmente, la
+#' perpendicularite 3-4 est preservee) ou d'**enregistrer sans corriger**.
+#'
+#' Les hauteurs sont mesurees perpendiculairement a l'axe du corps 1-2 -- une
+#' photo inclinee ne fausse donc pas le test -- et le cote dorsal est deduit de
+#' la position relative de 3 et 4, ce qui rend le controle valable quelle que
+#' soit l'orientation (tete a gauche ou a droite, photo retournee, case
+#' "Inverser dorsal/ventral" cochee). Sont EXCLUS de la comparaison le pedoncule
+#' et la nageoire caudale (16-19), qui depassent le corps par definition, ainsi
+#' que les extremites d'appendices (12 pectorale, 15 machoire) ; la barre
+#' d'echelle (20, 21), le point derive (23) et les charnieres (24, 25) ne sont
+#' pas des points de contour. La tolerance vaut 0,003 fois la longueur du corps
+#' (soit 3 pixels pour un poisson de 1000 pixels), en deca de quoi l'ecart releve
+#' du bruit de clic.
+#' Les points recales portent le statut `"adjusted"` dans le journal, distinct de
+#' `"placed"` : la correction automatique reste tracable specimen par specimen.
 #'
 #' @param xlsx_path Chemin du classeur maitre (2 feuilles).
 #' @param photo_dir Dossier des photos (reste en local).
@@ -780,6 +898,14 @@ launch_fishmorph_digitizer <- function(
         shiny::checkboxInput("flipdorsal", "Inverser dorsal/ventral", FALSE),
         shiny::checkboxInput("correct",
           "Respecter les conventions (edition contrainte)", FALSE),
+        shiny::checkboxInput("checkextremes",
+          "Verifier 3/4 (extremes) a l'enregistrement", TRUE),
+        shiny::helpText("A l'enregistrement, verifie que 3 est le point le plus",
+                        "DORSAL et 4 le plus VENTRAL (hauteurs mesurees",
+                        "perpendiculairement a l'axe du corps). Caudale (16-19) et",
+                        "extremites d'appendices (12, 15) sont exclues. En cas",
+                        "d'ecart, propose de remesurer ou de corriger",
+                        "automatiquement."),
         shiny::checkboxInput("showlines", "Lignes de repere (contour/oeil/ventre)", TRUE),
         shiny::checkboxInput("fastdisp", "Affichage rapide (photo allegee)", TRUE),
         shiny::hr(),
@@ -845,8 +971,10 @@ launch_fishmorph_digitizer <- function(
       arr = NULL, flip = "none", dispflip = "none", na = integer(0),
       newstamp = 0L,         # incremente a chaque ecriture dans new_sheet
       flushstamp = 0L,       # incremente a chaque ecriture du classeur
-      edited = integer(0))   # points DEPLACES par l'utilisateur cette session
+      edited = integer(0),   # points DEPLACES par l'utilisateur cette session
                              # (distincts des points simplement charges du classeur)
+      adjusted = integer(0)) # points recales par la convention des extremes
+                             # (statut "adjusted" dans le journal)
 
     # file et liste d'acces direct du mode courant. En mode "new" la file indexe
     # les PHOTOS de new_photo_dir (et non des lignes de lm_df).
@@ -1011,7 +1139,7 @@ launch_fishmorph_digitizer <- function(
 
     load_species <- function() {
       rv$A <- NULL; rv$B <- NULL; rv$P <- NULL; rv$override <- list(); rv$na <- integer(0)
-      rv$edited <- integer(0)
+      rv$edited <- integer(0); rv$adjusted <- integer(0)
       rv$sel <- 1L; rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL
       if (!length(qrows())) { rv$img <- NULL; rv$arr <- NULL; return() }
       path <- cur_photo()
@@ -1113,6 +1241,9 @@ launch_fishmorph_digitizer <- function(
         ov[[k]] <- NULL; ov[[k]] <- pt; rv$override <- ov
         if (s %in% rv$na) rv$na <- setdiff(rv$na, s)   # re-place -> n'est plus NA
         rv$edited <- union(rv$edited, s)               # point deplace a la main
+        # un point recale par la convention puis repointe a la main redevient une
+        # MESURE : il ne doit plus sortir "adjusted" dans le journal.
+        rv$adjusted <- setdiff(rv$adjusted, s)
       }
       rv$sel <- .fm_next(s, click_order())
     })
@@ -1124,6 +1255,7 @@ launch_fishmorph_digitizer <- function(
     shiny::observeEvent(input$set_na, {
       if (rv$sel %in% c(1L, 2L)) return()          # museau/caudale requis pour l'axe
       rv$na <- union(rv$na, rv$sel)
+      rv$adjusted <- setdiff(rv$adjusted, rv$sel)
       ov <- rv$override; ov[[as.character(rv$sel)]] <- NULL; rv$override <- ov
       rv$sel <- .fm_next(rv$sel, click_order())
     })
@@ -1269,6 +1401,7 @@ launch_fishmorph_digitizer <- function(
     # C'est l'information que le format large du classeur ne peut pas porter :
     #   placed  : pose / deplace a la main, ou recharge d'une saisie anterieure
     #   seeded  : ENCORE A SA POSITION DE GRAINE, donc jamais verifie -> a auditer
+    #   adjusted: recale par la convention des extremes (3/4), pas pointe
     #   derived : calcule automatiquement (8, 9, 11, 15, 23)
     #   na      : declare non mesurable
     point_status <- function(points) {
@@ -1277,6 +1410,10 @@ launch_fishmorph_digitizer <- function(
       # repositionne cette session n'est plus un point calcule, c'est une mesure.
       st <- vapply(points, function(p) {
         if (p %in% rv$na) "na"
+        # "adjusted" AVANT "placed" : un point recale par la convention des
+        # extremes n'a pas ete pointe par l'operateur, la distinction doit
+        # survivre dans le journal (controle qualite a posteriori).
+        else if (p %in% rv$adjusted) "adjusted"
         else if (p %in% rv$edited) "placed"
         else if (p %in% .FM_DERIVED) "derived"
         else if (p %in% c(1L, 2L) || as.character(p) %in% ov) "placed"
@@ -1301,7 +1438,86 @@ launch_fishmorph_digitizer <- function(
     # ORDRE IMPORTANT : le journal d'abord (ajout d'un bloc de lignes, immuable,
     # instantane), le classeur ensuite et par lots. Si R s'arrete entre les deux,
     # rien n'est perdu : fishmorph_consolidate(journal_dir) reconstruit la base.
+    # --- convention des extremes : verification a l'enregistrement --------------
+    # Le bouton "Enregistrer & suivant" ne declenche plus l'ecriture directement :
+    # il passe d'abord par ce controle. Si 3 n'est pas le point le plus dorsal (ou
+    # 4 le plus ventral), une fenetre propose de remesurer ou de corriger.
+    conv_msg <- function(v) {
+      shiny::tags$ul(lapply(seq_len(nrow(v)), function(r) {
+        i <- v$point[r]; j <- v$culprit[r]
+        shiny::tags$li(sprintf(
+          "Le point %d%s doit etre le plus %s : le point %d%s le depasse de %.0f px.",
+          i, .fm_pt_label(i), if (i == 3L) "DORSAL" else "VENTRAL",
+          j, .fm_pt_label(j), v$delta[r]))
+      }))
+    }
+    show_conv_modal <- function(v) {
+      shiny::showModal(shiny::modalDialog(
+        title = "Conventions FISHMORPH : Bd (3-4) n'est pas la profondeur maximale",
+        conv_msg(v),
+        shiny::tags$p(shiny::tags$em(
+          "Hauteurs mesurees perpendiculairement a l'axe du corps. La caudale",
+          "(16-19) et les extremites d'appendices (12, 15) sont exclues du test.")),
+        shiny::tags$p("Corriger automatiquement donne au point sa hauteur, en",
+                      "gardant sa position le long de l'axe ; les points recales",
+                      "sont notes 'adjusted' dans le journal."),
+        footer = shiny::tagList(
+          shiny::actionButton("conv_remeasure", "Remesurer", class = "btn-primary"),
+          shiny::actionButton("conv_fix", "Corriger automatiquement et enregistrer"),
+          shiny::actionButton("conv_asis", "Enregistrer sans corriger")),
+        easyClose = FALSE, size = "l"))
+    }
+    # applique la correction, en repassant par recon() : les conventions d'edition
+    # contrainte peuvent redeplacer des points (ligne du ventre notamment), donc on
+    # itere jusqu'a stabilite -- 3 passes suffisent largement, la garde evite une
+    # boucle infinie sur un cas pathologique.
+    apply_conv_fix <- function() {
+      for (it in 1:3) {
+        P <- recon()
+        v <- .fm_extreme_violations(P)
+        if (is.null(v)) return(invisible(TRUE))
+        Pf <- .fm_fix_extremes(P, v)
+        ov <- rv$override
+        for (i in v$point) {
+          k <- as.character(i); ov[[k]] <- NULL; ov[[k]] <- Pf[i, ]
+        }
+        rv$override <- ov
+        rv$na       <- setdiff(rv$na, v$point)
+        rv$edited   <- union(rv$edited, v$point)
+        rv$adjusted <- union(rv$adjusted, v$point)
+      }
+      invisible(is.null(.fm_extreme_violations(recon())))
+    }
+
     shiny::observeEvent(input$save, {
+      shiny::req(rv$A, rv$B)
+      if (isTRUE(input$checkextremes)) {
+        v <- .fm_extreme_violations(recon())
+        if (!is.null(v)) { show_conv_modal(v); return() }
+      }
+      do_save()
+    })
+
+    # 1) remesurer : on ferme, on selectionne le point fautif et on y zoome
+    shiny::observeEvent(input$conv_remeasure, {
+      shiny::removeModal()
+      v <- .fm_extreme_violations(recon())
+      if (!is.null(v)) { rv$sel <- v$point[1]; zoom_to_sel() }
+    })
+    # 2) corriger automatiquement puis enregistrer
+    shiny::observeEvent(input$conv_fix, {
+      shiny::removeModal()
+      ok <- apply_conv_fix()
+      if (!isTRUE(ok))
+        shiny::showNotification(
+          "Convention 3/4 toujours non respectee apres correction : verifiez la saisie.",
+          type = "warning", duration = 8)
+      do_save()
+    })
+    # 3) enregistrer tel quel (l'ecart est reel et assume)
+    shiny::observeEvent(input$conv_asis, { shiny::removeModal(); do_save() })
+
+    do_save <- function() {
       shiny::req(rv$A, rv$B)
       P <- recon()
       if (is_new()) {                              # nouveaux specimens : autre feuille
@@ -1347,7 +1563,7 @@ launch_fishmorph_digitizer <- function(
       rv$saved <- union(rv$saved, cur_row())
       shiny::showNotification(paste("Enregistre :", cur_name()), type = "message")
       nav(1)
-    })
+    }
 
     # ecriture manuelle du classeur (le journal, lui, est deja a jour)
     shiny::observeEvent(input$flush, {
@@ -1525,7 +1741,11 @@ launch_fishmorph_digitizer <- function(
              " -> cliquez sa position sur la photo (avance auto).\n",
              if (is.null(rv$A) || is.null(rv$B))
                "Posez d'abord museau (1) puis base caudale (2)."
-             else "Zoom : molette sur la photo ; double-clic = vue entiere.")
+             # NB : il n'y a PAS de zoom a la molette (aucun handler wheel n'est
+             # pose) ; le zoom passe par les boutons +/- du panneau de gauche.
+             else paste0("Zoom : boutons + / - (se centre sur le point actif) ; ",
+                         "clic droit maintenu = deplacer la vue ; ",
+                         "double-clic = vue entiere."))
     })
   }
 

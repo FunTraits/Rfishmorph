@@ -77,6 +77,32 @@ Les photographies restent EN LOCAL : elles ne sont jamais copiees dans le
 package ni dans le classeur, seuls leur nom de fichier et leurs dimensions en
 pixels sont enregistres. C'est \code{photo_dir} et \code{new_photo_dir} qui font le lien.
 }
+\section{Controle des extremes a l'enregistrement}{
+
+FISHMORPH definit \code{Bd} comme la profondeur MAXIMALE du corps : le point 3 doit
+donc etre le plus dorsal et le point 4 le plus ventral. Quand la case
+\emph{"Verifier 3/4 (extremes)"} est cochee (defaut), "Enregistrer & suivant"
+controle cette convention avant toute ecriture et, si elle est violee, propose
+de \strong{remesurer} (le point fautif devient actif et la vue s'y centre), de
+\strong{corriger automatiquement} (3, resp. 4, prend la hauteur du point qui le
+depasse, en gardant sa position le long de l'axe : \code{Bd} augmente, la
+perpendicularite 3-4 est preservee) ou d'\strong{enregistrer sans corriger}.
+
+Les hauteurs sont mesurees perpendiculairement a l'axe du corps 1-2 -- une
+photo inclinee ne fausse donc pas le test -- et le cote dorsal est deduit de
+la position relative de 3 et 4, ce qui rend le controle valable quelle que
+soit l'orientation (tete a gauche ou a droite, photo retournee, case
+"Inverser dorsal/ventral" cochee). Sont EXCLUS de la comparaison le pedoncule
+et la nageoire caudale (16-19), qui depassent le corps par definition, ainsi
+que les extremites d'appendices (12 pectorale, 15 machoire) ; la barre
+d'echelle (20, 21), le point derive (23) et les charnieres (24, 25) ne sont
+pas des points de contour. La tolerance vaut 0,003 fois la longueur du corps
+(soit 3 pixels pour un poisson de 1000 pixels), en deca de quoi l'ecart releve
+du bruit de clic.
+Les points recales portent le statut \code{"adjusted"} dans le journal, distinct de
+\code{"placed"} : la correction automatique reste tracable specimen par specimen.
+}
+
 \examples{
 \dontrun{
 launch_fishmorph_digitizer(

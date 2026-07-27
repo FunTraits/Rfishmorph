@@ -13,5 +13,7 @@ fishmorph_journal_qc(journal_dir, expect = c(1:19, 22L, 23L))
 }
 \description{
 Signale ce qu'un tableau de coordonnees ne montre pas : points jamais verifies
-(restes a la graine), points declares non mesurables, specimens incomplets.
+(restes a la graine), points declares non mesurables, points recales par une
+convention (colonnes \code{n_adjusted} / \code{adjusted} : 3 ou 4 ramenes a la
+profondeur maximale du corps par l'application), specimens incomplets.
 }

@@ -1,3 +1,32 @@
+# Rfishmorph 0.3.0
+
+## Extreme-point convention checked on save
+
+* `launch_fishmorph_digitizer()` now verifies, when "Enregistrer & suivant" is
+  pressed, that landmark 3 is the most **dorsal** and landmark 4 the most
+  **ventral** point of the body outline — the definition of `Bd` as the maximum
+  body depth. A specimen whose 5 (head top) sits above 3, or whose 11 (belly at
+  the pectoral) sits below 4, silently under-estimates `Bd`; this is now caught
+  before anything reaches the journal or the workbook.
+* On violation a dialog offers three routes: **remeasure** (the offending point
+  becomes active and the view centres on it), **auto-correct** (3, resp. 4, takes
+  the height of the point overshooting it while keeping its position along the
+  axis, so `Bd` grows and the 3-4 perpendicularity convention is preserved), or
+  **save as is**.
+* Heights are measured perpendicular to the body axis 1-2, so a tilted
+  photograph does not bias the test, and the dorsal side is inferred from the
+  relative position of 3 and 4 — the check therefore holds whatever the
+  orientation (head left or right, flipped photograph, "Inverser dorsal/ventral"
+  ticked). Caudal peduncle and fin (16-19) and appendage tips (12 pectoral,
+  15 jaw) are excluded, as are the scale bar (20, 21), the derived point (23)
+  and the hinges (24, 25). Tolerance: 0.003 of body length.
+* The check is toggled by the new "Verifier 3/4 (extremes) a l'enregistrement"
+  box (on by default).
+* New journal status **`"adjusted"`** for points relocated by that automatic
+  correction, distinct from `"placed"` (operator-pointed) and `"seeded"`
+  (never verified). `fishmorph_journal_qc()` reports them, so an auto-corrected
+  `Bd` remains traceable specimen by specimen.
+
 # Rfishmorph 0.2.0
 
 ## Package renamed

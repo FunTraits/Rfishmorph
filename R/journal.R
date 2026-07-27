@@ -59,16 +59,19 @@
   "mm_per_px",     # echelle deduite, ou NA
   "landmark",      # numero du point
   "x", "y",        # coordonnees en pixels image (Y vers le bas)
-  "status"         # placed | seeded | derived | na  (voir ci-dessous)
+  "status"         # placed | seeded | adjusted | derived | na  (voir ci-dessous)
 )
 
 # Signification de `status` -- c'est l'information que le format large du classeur
 # ne peut pas porter, et elle est precieuse en controle qualite :
 #   placed  : point pose ou deplace a la main (ou recharge d'une saisie anterieure)
 #   seeded  : point encore a sa position de GRAINE, jamais verifie par l'operateur
+#   adjusted: point recale automatiquement par une convention FISHMORPH a la
+#             demande de l'operateur (3/4 ramenes a la profondeur maximale du
+#             corps) : ni pointe a la main, ni simple graine
 #   derived : point calcule automatiquement (8, 9, 11, 15, 23)
 #   na      : point explicitement marque NON MESURABLE
-.FM_JOURNAL_STATUS <- c("placed", "seeded", "derived", "na")
+.FM_JOURNAL_STATUS <- c("placed", "seeded", "adjusted", "derived", "na")
 
 
 # --- utilitaires -------------------------------------------------------------
@@ -363,6 +366,7 @@ fm_journal_history <- function(journal_dir, row_key = NULL) {
     mode = g$mode[1], row_key = g$row_key[1], species = g$species[1],
     photo_file = g$photo_file[1], n_points = nrow(g),
     n_placed = sum(g$status == "placed"), n_seeded = sum(g$status == "seeded"),
+    n_adjusted = sum(g$status == "adjusted"),
     n_na = sum(g$status == "na"), stringsAsFactors = FALSE)))
   agg <- agg[order(agg$row_key, agg$timestamp, agg$record_id), ]
   rownames(agg) <- NULL
@@ -451,7 +455,9 @@ fishmorph_consolidate <- function(journal_dir, long = FALSE, drop_na_points = TR
 #' Controle qualite rapide d'une consolidation
 #'
 #' Signale ce qu'un tableau de coordonnees ne montre pas : points jamais verifies
-#' (restes a la graine), points declares non mesurables, specimens incomplets.
+#' (restes a la graine), points declares non mesurables, points recales par une
+#' convention (colonnes `n_adjusted` / `adjusted` : 3 ou 4 ramenes a la
+#' profondeur maximale du corps par l'application), specimens incomplets.
 #'
 #' @param journal_dir Dossier des journaux, ou data.frame deja lu.
 #' @param expect Points attendus pour un specimen complet.
@@ -467,6 +473,9 @@ fishmorph_journal_qc <- function(journal_dir, expect = c(1:19, 22L, 23L)) {
     n_seeded = sum(g$status == "seeded" & g$landmark %in% expect),
     seeded = paste(g$landmark[g$status == "seeded" & g$landmark %in% expect],
                    collapse = ","),
+    n_adjusted = sum(g$status == "adjusted" & g$landmark %in% expect),
+    adjusted = paste(g$landmark[g$status == "adjusted" & g$landmark %in% expect],
+                     collapse = ","),
     n_na = sum(g$status == "na" & g$landmark %in% expect),
     a_echelle = isTRUE(is.finite(suppressWarnings(as.numeric(g$mm_per_px[1])))),
     stringsAsFactors = FALSE)))
