@@ -1,0 +1,413 @@
+# Rfishmorph
+
+**Morphological traits, landmarks and quality control for the FISHMORPH
+database.**
+
+Rfishmorph collects the FISHMORPH routines originally developed inside
+`intraitR` into a stand-alone package dedicated to the FISHMORPH
+morphological database of freshwater fishes (Brosse et al., 2021). It
+reconstructs the 21 FISHMORPH landmarks, computes the 11 body segments
+and the 9 dimensionless ratios, standardizes landmark geometry and
+enforces the FISHMORPH digitizing conventions, projects specimens into
+the FISHMORPH functional trait space, and provides visualization and
+quality-control tools. It also offers a guided workflow to add new
+species, using `rfishbase` to validate taxonomy and build a global
+freshwater fish list.
+
+## Installation
+
+``` r
+
+# install.packages("devtools")
+remotes::install_github("FunTraits/Rfishmorph")
+```
+
+The core functions depend only on base R. Optional features use
+`ggplot2` (plots), `rfishbase` (taxonomy / freshwater list),
+`readxl`/`writexl` (Excel I/O) and `shiny`/`jpeg`/`png` (interactive
+reconstruction). After editing the roxygen comments, regenerate the help
+pages with `devtools::document()`.
+
+## The FISHMORPH scheme
+
+|  |  |  |
+|----|----|----|
+| **21 landmarks** | anatomical points digitized on a lateral photo | `fishmorph_schema()$landmark_labels` |
+| **11 segments** | `Bl, Bd, Hd, Eh, Mo, PFi, PFl, Ed, Jl, CPd, CFd` | [`fishmorph_segment_names()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_segment_names.md) |
+| **9 ratios** | `BEl, VEp, REs, OGp, RMl, BLs, PFv, PFs, CPt` | [`fishmorph_ratio_names()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_ratio_names.md) |
+
+Ratios are dimensionless (each is a quotient of two segments of the same
+specimen), so they are scale-invariant and comparable across studies.
+
+## Typical workflows
+
+### 1. Measure a specimen
+
+``` r
+
+library(Rfishmorph)
+
+lm  <- read_landmarks_csv(
+  system.file("extdata", "example_landmarks.csv", package = "Rfishmorph"))
+seg <- fishmorph_segments(lm, scale_cm = 1)   # 11 segments (cm)
+rat <- fishmorph_ratios(seg)                  # 9 ratios
+plot_landmarks(lm, specimen = 1)              # ggplot of points + segments
+```
+
+### 2. Functional trait space
+
+``` r
+
+ref <- load_fishmorph_reference()             # bundled 400-species sample
+ts  <- fishmorph_trait_space(ref, groups = ref$Order)   # frozen PCA
+plot_trait_space(ts,style = "none",arrows = T)                          # PCA with hulls + loadings
+```
+
+Project focal specimens into the global FISHMORPH morphospace and draw
+the reference density heatmap with per-species footprints (the intraitR
+figure):
+
+``` r
+
+# `specimens` = focal individuals from fishmorph_ratios(); reference = database
+proj <- project_fishmorph(specimens, reference = ref)
+plot(proj, style = "hull")                    # density heatmap + species hulls
+plot(proj, style = "hull", arrows = TRUE)     # add trait loading arrows
+plot(proj, style = "spider", itv_reference = TRUE)
+```
+
+### 3. Quality control: segments vs landmarks
+
+``` r
+
+# does a workbook's published morphology match its digitized landmarks?
+cmp <- compare_segments_landmarks(landmarks = lm, published = published_segments,
+                                  id_col = "Genus.species")
+summary(cmp)
+plot_segment_landmark_agreement(cmp, type = "scatter")
+plot_segment_landmark_agreement(cmp, type = "bar")
+
+check_infinite_ratios(rat)          # zero-denominator / outlier ratios
+check_geometry_conventions(lm)      # departure from the 5 digitizing rules
+```
+
+### 4. Add a new species
+
+``` r
+
+# resolve the name against FishBase (needs rfishbase)
+validate_species_names(c("Salmo trutta", "Esox_lucius"))
+
+# build a schema-compliant record, then append it to the reference
+rec <- new_fishmorph_species(
+  "Genus novus",
+  segments = list(Bl = 10, Bd = 3.2, Hd = 2.4, Eh = 1.1, Mo = 1.6, PFi = 1.9,
+                  PFl = 2.1, Ed = 0.6, Jl = 1.3, CPd = 1.0, CFd = 3.0),
+  family = "Cyprinidae", order = "Cypriniformes")
+ref2 <- add_fishmorph_species(ref, rec)
+
+# a global list of freshwater fishes (needs rfishbase)
+fw <- freshwater_fish_list()
+```
+
+### 5. Digitize photographs, store them safely, explore the space
+
+The two ends of the workflow are Shiny applications. **Photographs stay
+on your machine**: only their file name and pixel dimensions are ever
+recorded.
+
+``` r
+
+# --- digitize -------------------------------------------------------------
+# Three switchable queues: species without landmarks ("reconstruct"), already
+# landmarked species to review ("correct"), and brand-new photographs ("new").
+launch_fishmorph_digitizer(
+  xlsx_path     = "FishMORPH/FISHMORPH_PUBLI_9556sp.xlsx",
+  photo_dir     = "FishMORPH/Photos utilisées",   # stays local
+  new_photo_dir = "FishMORPH/Photos nouvelles",   # stays local
+  operator      = "AT",
+  mode          = "new")
+
+# --- consolidate ----------------------------------------------------------
+jdir <- "FishMORPH/landmark_journal"
+fm_journal_status(jdir)                       # what is actually in there?
+base <- fishmorph_consolidate(jdir)           # wide table, one row per key
+qc   <- fishmorph_journal_qc(jdir)            # never-verified points, gaps
+
+# --- database + archives (needs DBI + duckdb) -----------------------------
+res <- fishmorph_build_db(jdir,
+         db_path    = "FishMORPH/fishmorph.duckdb",
+         export_dir = "FishMORPH/exports")     # Parquet + CSV
+subset(res$issues, severite == "erreur")
+
+con <- fishmorph_db_connect("FishMORPH/fishmorph.duckdb")
+DBI::dbGetQuery(con, "FROM v_ratios WHERE species = ?",
+                params = list("Coilia.nasus"))
+DBI::dbDisconnect(con, shutdown = TRUE)
+
+# --- explore --------------------------------------------------------------
+launch_fishmorph_space()                      # embedded 9556-species dataset
+```
+
+## Data architecture
+
+Digitizing never overwrites what is already written:
+
+    photographs --> append-only journal --> DuckDB database --> Parquet / CSV
+    (local only)    (source of truth,       (constraints,       (citable archive)
+                     one TSV per session)    views, SQL)
+
+The journal is the only durable layer. The database and the workbook are
+**derived artefacts**:
+[`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)
+rebuilds them from scratch in seconds, which is what makes it safe to
+keep them in a synchronised folder. Never write into the database by
+hand — the next rebuild will erase it.
+
+Each point carries a `status` that a wide coordinate table cannot
+express: `placed` (clicked), `seeded` (**still at its seed position,
+never checked**), `derived` (computed: 8, 9, 11, 15, 23), `na` (declared
+unmeasurable). In `reconstruct` mode a `seeded` point still sits exactly
+where the input segments put it, so validating its ratio against the
+FISHMORPH envelope is circular — filter on `status` before any
+validation analysis.
+
+## Round-trip guarantee
+
+[`reconstruct_fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/reconstruct_fishmorph_landmarks.md)
+is the inverse of
+[`fishmorph_segments()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_segments.md):
+the free placement parameters change only *where* landmarks sit, never
+the segment *lengths*.
+[`check_reconstruction_roundtrip()`](https://funtraits.github.io/Rfishmorph/reference/check_reconstruction_roundtrip.md)
+verifies that `segments -> landmarks -> segments` returns the input to
+machine precision.
+
+## Reference
+
+Brosse, S., Charpin, N., Su, G., Toussaint, A., Herrera-R, G.A.,
+Tedesco, P.A. & Villeger, S. (2021). FISHMORPH: A global database on
+morphological traits of freshwater fishes. *Global Ecology and
+Biogeography*, 30, 2330–2336. <https://doi.org/10.1111/geb.13395>
+
+## Note on provenance
+
+The FISHMORPH functions here mirror the `intraitR` implementations
+([`fishmorph_segments()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_segments.md),
+[`fishmorph_ratios()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_ratios.md),
+[`standardize_geometry()`](https://funtraits.github.io/Rfishmorph/reference/standardize_geometry.md),
+[`correct_geometry_conventions()`](https://funtraits.github.io/Rfishmorph/reference/correct_geometry_conventions.md),
+[`project_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/project_fishmorph.md)
+/ `trait_space()`), so the two packages remain interoperable while
+FISHMORPH support migrates out of `intraitR`. Objects of class
+`intrait_landmarks` are accepted throughout. \# Rfishmorph
+
+# Package index
+
+## All functions
+
+- [`Rfishmorph-data`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-data.md)
+  : Bundled data
+
+- [`add_fishmorph_species()`](https://funtraits.github.io/Rfishmorph/reference/add_fishmorph_species.md)
+  : Append new species to a FISHMORPH table
+
+- [`agreement_metrics()`](https://funtraits.github.io/Rfishmorph/reference/agreement_metrics.md)
+  : Agreement metrics between two paired numeric vectors
+
+- [`as_fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/as_fishmorph_landmarks.md)
+  : Coerce to fishmorph_landmarks
+
+- [`as_intrait_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/as_intrait_landmarks.md)
+  :
+
+  Coerce to an intraitR `intrait_landmarks` object
+
+- [`build_fishmorph_landmark_table()`](https://funtraits.github.io/Rfishmorph/reference/build_fishmorph_landmark_table.md)
+  : Build the landmark-derived FISHMORPH trait table
+
+- [`check_geometry_conventions()`](https://funtraits.github.io/Rfishmorph/reference/check_geometry_conventions.md)
+  : Check the FISHMORPH digitizing conventions
+
+- [`check_infinite_ratios()`](https://funtraits.github.io/Rfishmorph/reference/check_infinite_ratios.md)
+  : Diagnose non-finite or extreme FISHMORPH ratios
+
+- [`check_landmark_order()`](https://funtraits.github.io/Rfishmorph/reference/check_landmark_order.md)
+  : Report vertical-ordering inconsistencies in landmarks (no
+  correction)
+
+- [`check_reconstruction_roundtrip()`](https://funtraits.github.io/Rfishmorph/reference/check_reconstruction_roundtrip.md)
+  : Check the reconstruction round-trip
+
+- [`compare_segments_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/compare_segments_landmarks.md)
+  : Compare landmark-derived and published FISHMORPH measurements
+
+- [`correct_geometry_conventions()`](https://funtraits.github.io/Rfishmorph/reference/correct_geometry_conventions.md)
+  : Enforce the FISHMORPH digitizing conventions (optionally
+  straightening)
+
+- [`correct_landmark_order()`](https://funtraits.github.io/Rfishmorph/reference/correct_landmark_order.md)
+  : Correct impossible vertical landmark orderings
+
+- [`correct_zero_ratio_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/correct_zero_ratio_landmarks.md)
+  : Apply the "zero-ratio" conventions to landmarks
+
+- [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)
+  : Rebuild the DuckDB database from the journals
+
+- [`fishmorph_consolidate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_consolidate.md)
+  : Rebuild the analysable table from the journals
+
+- [`fishmorph_db_connect()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_db_connect.md)
+  : Open the database (read-only by default)
+
+- [`fishmorph_journal_qc()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_journal_qc.md)
+  : Quick quality control of a consolidation
+
+- [`fishmorph_landmark_pairs()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_landmark_pairs.md)
+  : Segment -\> landmark-pair map
+
+- [`fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_landmarks.md)
+  : Create a fishmorph_landmarks object
+
+- [`fishmorph_ratio_names()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_ratio_names.md)
+  : Names of the 9 FISHMORPH ratios
+
+- [`fishmorph_ratios()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_ratios.md)
+  : Compute the 9 FISHMORPH ratios
+
+- [`fishmorph_reconstruction_defaults()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_reconstruction_defaults.md)
+  : Default free parameters for landmark reconstruction
+
+- [`fishmorph_schema()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_schema.md)
+  : FISHMORPH digitizing scheme
+
+- [`fishmorph_segment_names()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_segment_names.md)
+  : Names of the 11 FISHMORPH segments
+
+- [`fishmorph_segments()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_segments.md)
+  : Compute the 11 FISHMORPH segments from landmarks
+
+- [`fishmorph_space_data()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_space_data.md)
+  : Path of the bundled FISHMORPH trait table
+
+- [`fishmorph_trait_space()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_trait_space.md)
+  : Build the FISHMORPH functional trait space
+
+- [`fishmorph_traits()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_traits.md)
+  : Full FISHMORPH trait table (segments + ratios)
+
+- [`fishmorph_validate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_validate.md)
+  : Structural AND morphometric control
+
+- [`fm_journal_append()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_append.md)
+  : Append one record (one specimen) to the journal
+
+- [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_history.md)
+  : History of the records of one key
+
+- [`fm_journal_open()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_open.md)
+  : Open a session journal (append-only)
+
+- [`fm_journal_read()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_read.md)
+  : Read and concatenate every journal in a directory
+
+- [`fm_journal_status()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_status.md)
+  : State of the journals in a directory
+
+- [`fm_save_workbook_atomic()`](https://funtraits.github.io/Rfishmorph/reference/fm_save_workbook_atomic.md)
+  : ATOMIC write of an openxlsx workbook
+
+- [`freshwater_fish_list()`](https://funtraits.github.io/Rfishmorph/reference/freshwater_fish_list.md)
+  : Build a global list of freshwater fishes
+
+- [`group_colors()`](https://funtraits.github.io/Rfishmorph/reference/group_colors.md)
+  : Look up the species colours used by the ordination plots
+
+- [`impute_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/impute_landmarks.md)
+  : Impute missing (NA) landmark coordinates
+
+- [`impute_traits()`](https://funtraits.github.io/Rfishmorph/reference/impute_traits.md)
+  : Impute missing values in a segment / ratio table
+
+- [`is_fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/is_fishmorph_landmarks.md)
+  : Test whether an object is a landmark configuration
+
+- [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+  : Interactive tool for digitizing the FISHMORPH landmarks
+
+- [`launch_fishmorph_reconstructor()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_reconstructor.md)
+  : Launch the reconstruction tool (deprecated)
+
+- [`launch_fishmorph_space()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_space.md)
+  : Morphological space explorer for freshwater fishes
+
+- [`load_fishmorph_phylo_axes()`](https://funtraits.github.io/Rfishmorph/reference/load_fishmorph_phylo_axes.md)
+  : Precomputed phylogenetic PCoA axes for the FISHMORPH species pool
+
+- [`load_fishmorph_phylogeny()`](https://funtraits.github.io/Rfishmorph/reference/load_fishmorph_phylogeny.md)
+  : Bundled global fish phylogeny
+
+- [`load_fishmorph_reference()`](https://funtraits.github.io/Rfishmorph/reference/load_fishmorph_reference.md)
+  : Load the FISHMORPH reference database
+
+- [`new_fishmorph_species()`](https://funtraits.github.io/Rfishmorph/reference/new_fishmorph_species.md)
+  : Create a FISHMORPH record for a new species
+
+- [`phylo_pcoa()`](https://funtraits.github.io/Rfishmorph/reference/phylo_pcoa.md)
+  : Phylogenetic Principal Coordinates Analysis
+
+- [`plot(`*`<fishmorph_projection>`*`)`](https://funtraits.github.io/Rfishmorph/reference/plot.fishmorph_projection.md)
+  : Plot specimens projected into the global FISHMORPH space
+
+- [`plot_functional_space()`](https://funtraits.github.io/Rfishmorph/reference/plot_functional_space.md)
+  : Plot species in the FISHMORPH functional space (landmark- or
+  segment-based)
+
+- [`plot_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/plot_landmarks.md)
+  : Plot a digitized / reconstructed fish
+
+- [`plot_segment_landmark_agreement()`](https://funtraits.github.io/Rfishmorph/reference/plot_segment_landmark_agreement.md)
+  : Plot landmark-vs-published agreement
+
+- [`plot_trait_distributions()`](https://funtraits.github.io/Rfishmorph/reference/plot_trait_distributions.md)
+  : Distributions of the FISHMORPH traits
+
+- [`plot_trait_space()`](https://funtraits.github.io/Rfishmorph/reference/plot_trait_space.md)
+  : Plot the FISHMORPH functional trait space (intraitR style)
+
+- [`project_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/project_fishmorph.md)
+  : Project specimens into the global FISHMORPH functional space
+
+- [`read_landmarks_csv()`](https://funtraits.github.io/Rfishmorph/reference/read_landmarks_csv.md)
+  : Read digitized landmarks from a CSV file
+
+- [`reconstruct_fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/reconstruct_fishmorph_landmarks.md)
+  : Reconstruct the 21 FISHMORPH landmarks from segments
+
+- [`reset_group_colors()`](https://funtraits.github.io/Rfishmorph/reference/reset_group_colors.md)
+  : Reset the session-level species colour cache
+
+- [`set_fishmorph_source()`](https://funtraits.github.io/Rfishmorph/reference/set_fishmorph_source.md)
+  [`get_fishmorph_source()`](https://funtraits.github.io/Rfishmorph/reference/set_fishmorph_source.md)
+  : Choose the FISHMORPH measurement campaign for the session
+
+- [`standardize_geometry()`](https://funtraits.github.io/Rfishmorph/reference/standardize_geometry.md)
+  : Standardize landmark geometry (rescale, translate, optionally
+  orient)
+
+- [`update_fishmorph_taxonomy()`](https://funtraits.github.io/Rfishmorph/reference/update_fishmorph_taxonomy.md)
+  : Update the taxonomy of a FISHMORPH table
+
+- [`validate_species_names()`](https://funtraits.github.io/Rfishmorph/reference/validate_species_names.md)
+  : Validate and resolve species names against FishBase
+
+- [`write_landmarks_csv()`](https://funtraits.github.io/Rfishmorph/reference/write_landmarks_csv.md)
+  : Write landmarks to a CSV file (long layout)
+
+# Articles
+
+### All vignettes
+
+- [Getting started with
+  Rfishmorph](https://funtraits.github.io/Rfishmorph/articles/Rfishmorph.md):
