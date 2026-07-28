@@ -26,8 +26,9 @@ traits of freshwater fishes. \emph{Global Ecology and Biogeography}, 30, 2330-23
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/aureletoussaint/Rfishmorph}
-  \item Report bugs at \url{https://github.com/aureletoussaint/Rfishmorph/issues}
+  \item \url{https://github.com/FunTraits/Rfishmorph}
+  \item \url{https://funtraits.github.io/Rfishmorph/}
+  \item Report bugs at \url{https://github.com/FunTraits/Rfishmorph/issues}
 }
 
 }

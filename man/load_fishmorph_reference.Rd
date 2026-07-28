@@ -4,15 +4,30 @@
 \alias{load_fishmorph_reference}
 \title{Load the FISHMORPH reference database}
 \usage{
-load_fishmorph_reference(file = NULL, sheet = NULL)
+load_fishmorph_reference(
+  file = NULL,
+  sheet = NULL,
+  source = NULL,
+  quiet = FALSE
+)
 }
 \arguments{
 \item{file}{Path to a FISHMORPH CSV (\verb{;}-separated) or XLSX file. \code{NULL}
-(default) loads the full bundled table; \code{"sample"} loads the 400-species
-sample; \code{"full"} is an explicit synonym of \code{NULL}.}
+(default) loads the full bundled table for the active \code{source}; \code{"sample"}
+loads the 400-species segment sample; \code{"full"} is an explicit synonym of
+\code{NULL}.}
 
 \item{sheet}{Sheet name when \code{file} is an XLSX (default \code{"Global_ratios"} then
 the first sheet).}
+
+\item{source}{Which measurement campaign to read: \code{"segment"} (the published
+table) or \code{"landmark"} (the re-digitized one). Defaults to
+\code{getOption("fishmorph.source", "segment")}. Ignored when \code{file} is an
+explicit path.}
+
+\item{quiet}{Suppress the one-line message reporting which table was loaded
+and how many species it holds (default \code{FALSE}). That message exists so an
+analysis can never silently run on the partial landmark pool.}
 }
 \value{
 A data frame with columns \verb{Species, Family, Order, Genus}, the 9 ratio
@@ -35,12 +50,30 @@ logarithm twice and silently distort the ordination. Ratios recomputed from
 landmarks with \code{\link[=fishmorph_ratios]{fishmorph_ratios()}} are on the raw scale and \emph{do} need it.
 }
 
+\section{Segment- vs landmark-derived traits}{
+
+Two measurement campaigns describe the same species pool. \code{source = "segment"} reads the published table, whose ratios come from the eleven
+segments measured on the plates (Brosse et al. 2021). \code{source = "landmark"}
+reads \code{fishmorph_data_landmarks.csv}, whose ratios are recomputed from the
+landmark re-digitization through \code{\link[=fishmorph_segments]{fishmorph_segments()}}, and which therefore
+covers \strong{only the species already digitized} -- fewer rows, reported on
+load. The two tables share their column names, separator and \code{log10(x + 1)}
+scale, so they are interchangeable wherever a reference is expected. The
+default is read from \code{getOption("fishmorph.source")} and can be set once per
+session with \code{\link[=set_fishmorph_source]{set_fishmorph_source()}}. See
+\code{\link[=build_fishmorph_landmark_table]{build_fishmorph_landmark_table()}} for how the landmark table is produced.
+}
+
 \examples{
-ref <- load_fishmorph_reference()          # 8,970 species
+ref <- load_fishmorph_reference()          # 8,970 species (segments)
 nrow(ref)
 small <- load_fishmorph_reference("sample")  # 400 species
+\dontrun{
+lmk <- load_fishmorph_reference(source = "landmark")  # re-digitized subset
+}
 }
 \seealso{
 \code{\link[=fishmorph_space_data]{fishmorph_space_data()}} for the path of the bundled full table,
+\code{\link[=set_fishmorph_source]{set_fishmorph_source()}}, \code{\link[=build_fishmorph_landmark_table]{build_fishmorph_landmark_table()}},
 \code{\link[=launch_fishmorph_space]{launch_fishmorph_space()}} to explore it interactively.
 }

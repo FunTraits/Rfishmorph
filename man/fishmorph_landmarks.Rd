@@ -9,7 +9,7 @@ fishmorph_landmarks(
   metadata = NULL,
   scale = NULL,
   specimen = NULL,
-  pad_to = 21L
+  pad_to = .FM_N_POINTS
 )
 }
 \arguments{
@@ -24,11 +24,16 @@ landmark coordinates (see \code{\link[=read_landmarks_csv]{read_landmarks_csv()}
 \item{specimen}{Optional specimen name(s) used when \code{coords} has none.}
 
 \item{pad_to}{Minimum number of landmarks the object must carry. When the
-input has fewer (e.g. only 20 points, without the scale-bar landmarks
-20-21), the missing landmarks are added as \code{NA} rows so the configuration
-still follows the FISHMORPH scheme and is accepted by downstream functions
-(\code{fishmorph_segments()}, \code{plot_fishmorph_points()}, ...). Default \code{21L}
-(the 19 anatomical + 2 scale-bar landmarks). Set \code{NULL} to disable padding.}
+input has fewer, the missing landmarks are added as \code{NA} rows so the
+configuration still follows the FISHMORPH scheme and is accepted by
+downstream functions (\code{fishmorph_segments()}, \code{plot_fishmorph_points()},
+...). Default \code{25L} since Rfishmorph 0.5.0: the canonical frame is the one
+the digitizer records -- 19 anatomical landmarks, the scale bar 20-21, the
+curvature hinge 22, the derived point 23 and the extra axis hinges 24-25.
+Padding to 21 used to leave objects one shape and the stored data another,
+so a configuration that had hinges lost them on the way in. \code{NA} means
+"not placed" and every routine skips it, so the wider frame costs nothing.
+Set \code{NULL} to disable padding.}
 }
 \value{
 An object of class \code{fishmorph_landmarks}.
@@ -39,6 +44,6 @@ Create a fishmorph_landmarks object
 \examples{
 P <- matrix(rnorm(44), 22, 2, dimnames = list(NULL, c("X", "Y")))
 fishmorph_landmarks(P, specimen = "demo")
-# a 20-landmark config is padded to 21 (scale bar as NA):
+# a 20-landmark config is padded to 25 (scale bar and hinges as NA):
 dim(fishmorph_landmarks(matrix(rnorm(40), 20, 2))$coords)
 }

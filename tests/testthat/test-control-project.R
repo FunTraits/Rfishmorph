@@ -98,7 +98,11 @@ test_that("impute_landmarks fills a missing anatomical landmark (impute_mean)", 
   objs <- lapply(1:6, function(i)
     reconstruct_fishmorph_landmarks(segs, px_per_cm = 40 + i,
                                     specimen = paste0("sp", i)))
-  co <- array(NA_real_, c(21, 2, 6),
+  # Frame size is read from the objects, not hard-coded: the canonical frame
+  # widened from 21 to 25 points in 0.5.0 and a literal here would have to be
+  # chased every time the scheme gains a point.
+  npt <- dim(objs[[1]]$coords)[1]
+  co <- array(NA_real_, c(npt, 2, 6),
               dimnames = list(NULL, c("X", "Y"), paste0("sp", 1:6)))
   for (i in 1:6) co[, , i] <- objs[[i]]$coords[, , 1]
   co[5, , 1] <- NA                       # drop landmark 5 of specimen 1

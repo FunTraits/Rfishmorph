@@ -7,6 +7,7 @@
 project_fishmorph(
   specimens,
   reference = NULL,
+  source = NULL,
   traits = fishmorph_ratio_names(),
   groups = NULL,
   select_species = NULL,
@@ -27,7 +28,15 @@ per specimen and at least the \code{traits} columns, plus a \code{species} colum
 \item{reference}{The reference trait table: a data frame/matrix with the
 \code{traits} columns, or a path to a delimited file (\verb{;}-separated read with
 \code{\link[utils:read.csv2]{utils::read.csv2()}}, \verb{,}-separated with \code{\link[utils:read.csv]{utils::read.csv()}}). If \code{NULL}
-(default), the bundled reference (\code{\link[=load_fishmorph_reference]{load_fishmorph_reference()}}) is used.}
+(default), the bundled reference (\code{\link[=load_fishmorph_reference]{load_fishmorph_reference()}}) is used,
+for the campaign named by \code{source}.}
+
+\item{source}{Which bundled reference to use when \code{reference} is \code{NULL}:
+\code{"segment"} or \code{"landmark"}. \code{NULL} (default) follows
+\code{getOption("fishmorph.source", "segment")}, see \code{\link[=set_fishmorph_source]{set_fishmorph_source()}}.
+The ordination is always fitted on whichever table is supplied, so
+switching \code{source} refits the space rather than reprojecting into the
+other one -- scores from the two campaigns are not comparable term by term.}
 
 \item{traits}{Character vector of trait columns present on both sides.
 Defaults to the nine FISHMORPH ratios.}

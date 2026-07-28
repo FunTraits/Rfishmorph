@@ -5,7 +5,8 @@
 \title{Build the FISHMORPH functional trait space}
 \usage{
 fishmorph_trait_space(
-  data,
+  data = NULL,
+  source = NULL,
   traits = fishmorph_ratio_names(),
   groups = NULL,
   log = FALSE,
@@ -22,7 +23,15 @@ fishmorph_trait_space(
 }
 \arguments{
 \item{data}{A data frame of traits, or a \code{fishmorph_landmarks} object (its
-ratios are computed first).}
+ratios are computed first). \code{NULL} (default) fits the space on the bundled
+reference of the campaign named by \code{source}.}
+
+\item{source}{Which bundled table to fit when \code{data} is \code{NULL}: \code{"segment"}
+or \code{"landmark"}. \code{NULL} (default) follows
+\code{getOption("fishmorph.source", "segment")}, see \code{\link[=set_fishmorph_source]{set_fishmorph_source()}}.
+The PCA is refitted on the chosen table, so the two campaigns define two
+distinct coordinate systems: axis order and sign may differ, and scores are
+not comparable across campaigns without a Procrustes alignment.}
 
 \item{traits}{Character vector of trait columns. Defaults to the 9 FISHMORPH
 ratios.}

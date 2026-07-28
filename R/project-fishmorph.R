@@ -24,7 +24,14 @@
 #' @param reference The reference trait table: a data frame/matrix with the
 #'   `traits` columns, or a path to a delimited file (`;`-separated read with
 #'   [utils::read.csv2()], `,`-separated with [utils::read.csv()]). If `NULL`
-#'   (default), the bundled reference ([load_fishmorph_reference()]) is used.
+#'   (default), the bundled reference ([load_fishmorph_reference()]) is used,
+#'   for the campaign named by `source`.
+#' @param source Which bundled reference to use when `reference` is `NULL`:
+#'   `"segment"` or `"landmark"`. `NULL` (default) follows
+#'   `getOption("fishmorph.source", "segment")`, see [set_fishmorph_source()].
+#'   The ordination is always fitted on whichever table is supplied, so
+#'   switching `source` refits the space rather than reprojecting into the
+#'   other one -- scores from the two campaigns are not comparable term by term.
 #' @param traits Character vector of trait columns present on both sides.
 #'   Defaults to the nine FISHMORPH ratios.
 #' @param groups Optional grouping vector (one per specimen); defaults to a
@@ -58,6 +65,7 @@
 #' }
 #' @export
 project_fishmorph <- function(specimens, reference = NULL,
+                              source = NULL,
                               traits = fishmorph_ratio_names(),
                               groups = NULL,
                               select_species = NULL, select_specimens = NULL,
@@ -70,7 +78,7 @@ project_fishmorph <- function(specimens, reference = NULL,
   if (length(axes) != 2 || !is.numeric(axes))
     stop("`axes` must be a length-2 integer vector.", call. = FALSE)
 
-  if (is.null(reference)) reference <- load_fishmorph_reference()
+  if (is.null(reference)) reference <- load_fishmorph_reference(source = source)
   if (is.character(reference) && length(reference) == 1) {
     if (!file.exists(reference))
       stop("`reference` file does not exist: ", reference, call. = FALSE)

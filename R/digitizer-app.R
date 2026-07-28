@@ -450,32 +450,49 @@
 # ventral profile is a global fit, steadier than a single click. For the eye at
 # the top of the head, 5 (the head outline) comes onto 13, since moving 13 would
 # change Ed, a measurement in its own right.
+# A rule is a list of MOVES, each `c(from, to)`: one rule can have to move more
+# than one point, and not necessarily onto the same partner. `6 = 8` is the case
+# that forces this. Point 23 is the intersection of the line (1, 9) with the
+# line through 6 parallel to the head axis; the belly line {9, 8, 11} is itself
+# parallel to that axis by convention. So the moment 6 sits ON the belly line,
+# the parallel through 6 IS the belly line, and its intersection with (1, 9) is
+# 9 itself: 23 = 9 follows, it is not an extra convention. Checked numerically,
+# including on a tilted photograph, where the derived 23 lands exactly on 9.
 .FM_COLLAPSE <- list(
-  Mo  = list(from = c(9L, 23L), to = 1L, label = "Mo = 0 (mouth on the belly)",
+  Mo  = list(moves = list(c(9L, 1L), c(23L, 1L)),
+             label = "Mo = 0 (mouth on the belly)",
              tip = "9 and 23 take the coordinates of 1: mouth height nil, OGp = 0"),
-  Hd6 = list(from = 6L, to = 8L, label = "6 = 8 (head bottom on the belly)",
-             tip = "6 takes the coordinates of 8: the head ends on the ventral profile"),
-  PFi = list(from = 10L, to = 11L, label = "PFi = 0 (pectoral on the belly)",
+  Hd6 = list(moves = list(c(6L, 8L), c(23L, 9L)),
+             label = "6 = 8 (head bottom on the belly)",
+             tip = paste("6 takes the coordinates of 8: the head ends on the",
+                         "ventral profile -- and 23 follows 9, since the",
+                         "parallel through 6 is then the belly line itself")),
+  PFi = list(moves = list(c(10L, 11L)),
+             label = "PFi = 0 (pectoral on the belly)",
              tip = "10 takes the coordinates of 11: insertion on the ventral profile, PFv = 0"),
-  EyeTop = list(from = 5L, to = 13L, label = "5 = 13 (eye at the head top)",
+  EyeTop = list(moves = list(c(5L, 13L)),
+                label = "5 = 13 (eye at the head top)",
                 tip = "5 takes the coordinates of 13: the eye reaches the dorsal profile")
 )
 
-# Apply the active rules. A rule whose reference is not placed is skipped: a
-# zero is only meaningful once the point it is measured from exists.
+# Apply the active rules, move by move and in order. A move whose reference is
+# not placed is skipped: a zero is only meaningful once the point it is measured
+# from exists. Order matters when several rules are on -- with both `Mo` and
+# `6 = 8`, 9 goes onto 1 first, so 23 then follows 9 to the same place.
 .fm_apply_collapse <- function(P, active) {
   if (is.null(P) || !length(active)) return(P)
-  for (nm in intersect(active, names(.FM_COLLAPSE))) {
-    r <- .FM_COLLAPSE[[nm]]
-    if (r$to <= nrow(P) && all(is.finite(P[r$to, ])))
-      for (f in r$from) if (f <= nrow(P)) P[f, ] <- P[r$to, ]
-  }
+  for (nm in intersect(active, names(.FM_COLLAPSE)))
+    for (mv in .FM_COLLAPSE[[nm]]$moves) {
+      if (mv[1] > nrow(P) || mv[2] > nrow(P)) next
+      if (all(is.finite(P[mv[2], ]))) P[mv[1], ] <- P[mv[2], ]
+    }
   P
 }
 .fm_collapse_points <- function(active) {
   if (!length(active)) return(integer(0))
   unlist(lapply(.FM_COLLAPSE[intersect(active, names(.FM_COLLAPSE))],
-                function(r) r$from), use.names = FALSE)
+                function(r) vapply(r$moves, function(m) m[1], integer(1))),
+         use.names = FALSE)
 }
 
 # labels of the points, for the application's messages
@@ -752,8 +769,14 @@
 #' `OGp = 0` for a mouth opening on the ventral profile, `PFv = 0` for a
 #' pectoral fin inserted on the belly. Four rules are offered: `Mo = 0` (9, and
 #' 23, take the coordinates of 1), `6 = 8` (the bottom of the head is the body
-#' underside), `PFi = 0` (10 takes the coordinates of 11) and `5 = 13` (an eye
-#' reaching the top of the head).
+#' underside, and 23 follows 9), `PFi = 0` (10 takes the coordinates of 11) and
+#' `5 = 13` (an eye reaching the top of the head).
+#'
+#' That 23 follows 9 under `6 = 8` is a consequence, not an extra convention.
+#' Point 23 is the intersection of the line (1, 9) with the line through 6
+#' parallel to the head axis, and the belly line {9, 8, 11} is itself parallel
+#' to that axis. The moment 6 sits ON the belly line, that parallel IS the belly
+#' line, and its intersection with (1, 9) is 9.
 #'
 #' Nothing is deleted. Both points keep a position, both are drawn on the
 #' photograph and both are written to the workbook; one simply takes the
@@ -1079,11 +1102,40 @@ launch_fishmorph_digitizer <- function(
 
   app_css <- paste0(
     ".irs{margin-bottom:2px}",
-    # the action bars are single rows: the form-group margins the selectize and
-    # the checkboxes would add are removed
-    ".actionbar .form-group{margin-bottom:0;}",
-    ".actionbar .btn{margin-right:4px;}",
-    ".actionbar .selectize-control{margin-bottom:0;}",
+    # ---- toolbars ----------------------------------------------------------
+    # One button style for the whole app, defined here rather than borrowed from
+    # whatever Bootstrap happens to be loaded: the app must look the same with
+    # and without bslib. Buttons carry their ROLE in their weight -- one filled
+    # primary (Save), one amber (Mark NA, which destroys a measurement), the
+    # rest quiet outlines -- because a row where everything shouts reads as a
+    # row where nothing is important.
+    ".toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;",
+    "margin-bottom:8px;}",
+    ".toolbar .form-group{margin-bottom:0;}",
+    ".toolbar .selectize-control{margin-bottom:0;}",
+    ".toolbar .btn{height:32px;padding:0 12px;font-size:13px;line-height:30px;",
+    "border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:7px;",
+    "box-shadow:none;transition:background .12s,border-color .12s;}",
+    ".toolbar .btn:hover{background:#f3f4f6;border-color:#9ca3af;}",
+    ".toolbar .btn:active,.toolbar .btn:focus{outline:none;",
+    "box-shadow:0 0 0 3px rgba(37,99,235,.15);}",
+    ".toolbar .btn-primary{background:#2563eb;border-color:#2563eb;color:#fff;",
+    "font-weight:600;}",
+    ".toolbar .btn-primary:hover{background:#1d4ed8;border-color:#1d4ed8;}",
+    ".toolbar .btn-warning{background:#f59e0b;border-color:#f59e0b;color:#fff;",
+    "font-weight:600;}",
+    ".toolbar .btn-warning:hover{background:#d97706;border-color:#d97706;}",
+    # Related actions touch, so the eye reads them as one control.
+    ".tbgroup{display:inline-flex;}",
+    ".tbgroup .btn{border-radius:0;margin:0;border-right-width:0;}",
+    ".tbgroup .btn:first-child{border-top-left-radius:7px;",
+    "border-bottom-left-radius:7px;}",
+    ".tbgroup .btn:last-child{border-top-right-radius:7px;",
+    "border-bottom-right-radius:7px;border-right-width:1px;}",
+    ".tbsep{width:1px;height:22px;background:#e5e7eb;margin:0 3px;flex:0 0 auto;}",
+    ".tbhint{font-size:11.5px;color:#9ca3af;line-height:1.3;max-width:340px;}",
+    ".toolbar .selectize-input{min-height:32px;height:32px;padding:4px 10px;",
+    "border-radius:7px;border-color:#d1d5db;}",
     # a denser side panel: the tabs already separate the groups, so the vertical
     # rhythm inside a tab can be tighter
     ".sidetabs .tab-content{padding-top:10px;}",
@@ -1110,8 +1162,13 @@ launch_fishmorph_digitizer <- function(
     ".lmrow{display:flex;flex-wrap:nowrap;gap:3px;align-items:stretch;",
     "overflow-x:auto;margin-bottom:6px;padding-bottom:2px;}",
     ".lmrow .lmbtn{flex:1 1 0;min-width:30px;padding:7px 0;font-size:14px;",
-    "line-height:1.1;text-align:center;border:1px solid #ccc;border-radius:6px;",
-    "cursor:pointer;}",
+    "line-height:1.1;text-align:center;border:1px solid #d1d5db;",
+    "border-radius:7px;cursor:pointer;transition:filter .12s;}",
+    ".lmrow .lmbtn:hover{filter:brightness(0.94);}",
+    # A gap between the sections of the bar -- axis, anatomical run, derived and
+    # hinges, scale bar. Twenty-odd identical buttons in a row is a list; four
+    # groups is a map, and a point is found in the group it belongs to.
+    ".lmgap{flex:0 0 14px;}",
     # floor under the photograph: a narrower device draws nothing useful
     "#plot{min-width:360px;min-height:360px;}",
     ".collapsebar{margin:8px 0 10px 0;padding:6px 10px;background:#fffbeb;",
@@ -1267,30 +1324,34 @@ launch_fishmorph_digitizer <- function(
     # Everything done once per specimen on one row, where the eye already is:
     # the queue, the saving. Nothing here forces a trip back down to the side
     # panel in the middle of an entry.
-    shiny::div(class = "actionbar", style = "margin-bottom:6px;",
-      shiny::actionButton("prev", "< Previous"),
-      shiny::actionButton("nextsp", "Next >"),
-      shiny::span(style = "display:inline-block;width:14px;"),
+    shiny::div(
+      class = "toolbar",
+      shiny::div(class = "tbgroup",
+        shiny::actionButton("prev", "\u2039 Previous"),
+        shiny::actionButton("nextsp", "Next \u203a")),
+      shiny::div(class = "tbsep"),
       shiny::actionButton("save", "Save & next", class = "btn-primary"),
       shiny::actionButton("skip", "Skip"),
-      shiny::span(style = "display:inline-block;width:14px;"),
-      shiny::div(style = "display:inline-block;vertical-align:middle;min-width:280px;",
+      shiny::div(class = "tbsep"),
+      shiny::div(style = "min-width:260px;",
         shiny::selectizeInput("goto_species", NULL, choices = NULL,
-          selected = NULL, width = "280px",
+          selected = NULL, width = "260px",
           options = list(placeholder = "Jump to a species...")))),
     # --- active-point bar -----------------------------------------------------
     # "Mark NA" acts on the point under the cursor: its place is against the
     # landmark bar, not against "Save & next" where a slip of one
     # button saved the specimen.
-    shiny::div(class = "actionbar", style = "margin-bottom:4px;",
+    shiny::div(
+      class = "toolbar",
       shiny::actionButton("set_na", "Mark NA", class = "btn-warning"),
-      shiny::span(style = "display:inline-block;width:14px;"),
-      shiny::actionButton("zoom_in", "Zoom +"),
-      shiny::actionButton("zoom_out", "Zoom -"),
-      shiny::actionButton("zoom_reset", "Whole view"),
-      shiny::span(style = "font-size:12px;color:#6b7280;margin-left:10px;",
-        "Right-click and drag to pan; double-click for the whole view;",
-        "the zoom centres on the active point.")),
+      shiny::div(class = "tbsep"),
+      shiny::div(class = "tbgroup",
+        shiny::actionButton("zoom_in", "Zoom +"),
+        shiny::actionButton("zoom_out", "Zoom \u2212"),
+        shiny::actionButton("zoom_reset", "Whole view")),
+      shiny::div(class = "tbhint",
+        "Right-click and drag to pan \u00b7 double-click for the whole view \u00b7",
+        "the zoom centres on the active point")),
     shiny::uiOutput("lm_buttons"),
     shiny::plotOutput("plot", height = "620px", click = "click",
       dblclick = "img_dblclick"),
@@ -1717,10 +1778,16 @@ launch_fishmorph_digitizer <- function(
 
     # point bar above the photograph (green = active, blue = placed, grey = derived)
     output$lm_buttons <- shiny::renderUI({
-      # broken axis at the head of the list: 1, 22, 24, 2; then the anatomical
+      # Four sections, separated by a gap: the broken axis (1, 22, 24, 2), the
+      # anatomical run, the points never clicked (derived, spare hinge 25), and
+      # the scale bar in "new" mode. A single run of identical buttons is a
+      # list; four groups is a map, and a point is found in the group it
+      # belongs to.
       anat <- setdiff(click_order(), c(1L, 22L, 24L, 2L, .FM_SCALE_PTS))
-      order_show <- c(1L, 22L, 24L, 2L, anat, .FM_DERIVED, 25L,
-                      if (is_new()) .FM_SCALE_PTS)
+      sections <- list(c(1L, 22L, 24L, 2L), anat, c(.FM_DERIVED, 25L),
+                       if (is_new()) .FM_SCALE_PTS)
+      sections <- Filter(length, sections)
+      order_show <- unlist(sections, use.names = FALSE)
       placed <- function(i) {
         if (i == 1L) return(!is.null(rv$A)); if (i == 2L) return(!is.null(rv$B))
         as.character(i) %in% names(rv$override)
@@ -1741,7 +1808,13 @@ launch_fishmorph_digitizer <- function(
       # the specimen, read at a glance dozens of times per fish, and the colour
       # code is stated once at the foot of the page. A legend repeated above
       # every specimen would only push the photograph further down.
-      shiny::div(class = "lmrow", btns)
+      kids <- list(); k0 <- 0L
+      for (k in seq_along(sections)) {
+        if (k > 1L) kids[[length(kids) + 1L]] <- shiny::div(class = "lmgap")
+        kids <- c(kids, btns[k0 + seq_along(sections[[k]])])
+        k0 <- k0 + length(sections[[k]])
+      }
+      shiny::div(class = "lmrow", kids)
     })
 
     # The colour code and the conventions, at the foot of the page: read once.

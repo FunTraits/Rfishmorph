@@ -1,0 +1,9 @@
+url: https://funtraits.github.io/Rfishmorph/
+
+template:
+  bootstrap: 5
+
+# No `reference:` section on purpose: pkgdown then indexes every exported
+# function automatically. A hand-written index has to be updated at every new
+# export, and pkgdown fails the build when one is missing -- which turns a
+# documentation site into a maintenance tax.

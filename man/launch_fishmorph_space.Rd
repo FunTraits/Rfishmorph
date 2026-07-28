@@ -4,13 +4,17 @@
 \alias{launch_fishmorph_space}
 \title{Morphological space explorer for freshwater fishes}
 \usage{
-launch_fishmorph_space(data = NULL, launch.browser = TRUE, ...)
+launch_fishmorph_space(data = NULL, source = NULL, launch.browser = TRUE, ...)
 }
 \arguments{
 \item{data}{Path to a trait CSV (semicolon-separated) replacing the bundled
 data set. Useful to work on a more recent version, or on the result of
 \code{\link[=fishmorph_build_db]{fishmorph_build_db()}} exported to CSV. \code{NULL} uses the data set bundled
 with the package.}
+
+\item{source}{Which measurement campaign to explore: \code{"segment"} or
+\code{"landmark"}. \code{NULL} (default) follows
+\code{getOption("fishmorph.source", "segment")}. Ignored when \code{data} is given.}
 
 \item{launch.browser}{Open in the default browser.}
 
@@ -29,11 +33,13 @@ user-supplied set of species.
 \examples{
 \dontrun{
 launch_fishmorph_space()
+launch_fishmorph_space(source = "landmark")
 launch_fishmorph_space(data = "my_traits.csv")
 }
 }
 \seealso{
 \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} to produce the landmarks,
+\code{\link[=set_fishmorph_source]{set_fishmorph_source()}},
 \code{\link[=project_fishmorph]{project_fishmorph()}} to project specimens by computation rather than
 interactively.
 }

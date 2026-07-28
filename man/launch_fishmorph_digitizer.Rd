@@ -115,8 +115,14 @@ a placement error -- and the FISHMORPH ratios are defined to take it:
 \code{OGp = 0} for a mouth opening on the ventral profile, \code{PFv = 0} for a
 pectoral fin inserted on the belly. Four rules are offered: \code{Mo = 0} (9, and
 23, take the coordinates of 1), \code{6 = 8} (the bottom of the head is the body
-underside), \code{PFi = 0} (10 takes the coordinates of 11) and \code{5 = 13} (an eye
-reaching the top of the head).
+underside, and 23 follows 9), \code{PFi = 0} (10 takes the coordinates of 11) and
+\code{5 = 13} (an eye reaching the top of the head).
+
+That 23 follows 9 under \code{6 = 8} is a consequence, not an extra convention.
+Point 23 is the intersection of the line (1, 9) with the line through 6
+parallel to the head axis, and the belly line {9, 8, 11} is itself parallel
+to that axis. The moment 6 sits ON the belly line, that parallel IS the belly
+line, and its intersection with (1, 9) is 9.
 
 Nothing is deleted. Both points keep a position, both are drawn on the
 photograph and both are written to the workbook; one simply takes the

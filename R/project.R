@@ -20,33 +20,74 @@
 #' logarithm twice and silently distort the ordination. Ratios recomputed from
 #' landmarks with [fishmorph_ratios()] are on the raw scale and *do* need it.
 #'
+#' @section Segment- vs landmark-derived traits:
+#' Two measurement campaigns describe the same species pool. `source =
+#' "segment"` reads the published table, whose ratios come from the eleven
+#' segments measured on the plates (Brosse et al. 2021). `source = "landmark"`
+#' reads `fishmorph_data_landmarks.csv`, whose ratios are recomputed from the
+#' landmark re-digitization through [fishmorph_segments()], and which therefore
+#' covers **only the species already digitized** -- fewer rows, reported on
+#' load. The two tables share their column names, separator and `log10(x + 1)`
+#' scale, so they are interchangeable wherever a reference is expected. The
+#' default is read from `getOption("fishmorph.source")` and can be set once per
+#' session with [set_fishmorph_source()]. See
+#' [build_fishmorph_landmark_table()] for how the landmark table is produced.
+#'
 #' @param file Path to a FISHMORPH CSV (`;`-separated) or XLSX file. `NULL`
-#'   (default) loads the full bundled table; `"sample"` loads the 400-species
-#'   sample; `"full"` is an explicit synonym of `NULL`.
+#'   (default) loads the full bundled table for the active `source`; `"sample"`
+#'   loads the 400-species segment sample; `"full"` is an explicit synonym of
+#'   `NULL`.
 #' @param sheet Sheet name when `file` is an XLSX (default `"Global_ratios"` then
 #'   the first sheet).
+#' @param source Which measurement campaign to read: `"segment"` (the published
+#'   table) or `"landmark"` (the re-digitized one). Defaults to
+#'   `getOption("fishmorph.source", "segment")`. Ignored when `file` is an
+#'   explicit path.
+#' @param quiet Suppress the one-line message reporting which table was loaded
+#'   and how many species it holds (default `FALSE`). That message exists so an
+#'   analysis can never silently run on the partial landmark pool.
 #' @return A data frame with columns `Species, Family, Order, Genus`, the 9 ratio
 #'   columns, `MBl`, `MBw` and `IUCN` when available.
 #' @seealso [fishmorph_space_data()] for the path of the bundled full table,
+#'   [set_fishmorph_source()], [build_fishmorph_landmark_table()],
 #'   [launch_fishmorph_space()] to explore it interactively.
 #' @examples
-#' ref <- load_fishmorph_reference()          # 8,970 species
+#' ref <- load_fishmorph_reference()          # 8,970 species (segments)
 #' nrow(ref)
 #' small <- load_fishmorph_reference("sample")  # 400 species
+#' \dontrun{
+#' lmk <- load_fishmorph_reference(source = "landmark")  # re-digitized subset
+#' }
 #' @export
-load_fishmorph_reference <- function(file = NULL, sheet = NULL) {
+load_fishmorph_reference <- function(file = NULL, sheet = NULL,
+                                     source = NULL, quiet = FALSE) {
+  source <- .fm_resolve_source(source)
   # Symbolic shortcuts: they spare the caller a system.file() call for a file
-  # the package bundles anyway.
-  if (is.null(file) || identical(file, "full")) file <- "fishmorph_data.csv"
-  else if (identical(file, "sample")) file <- "fishmorph_reference_sample.csv"
-
-  if (!file.exists(file) && !grepl("[/\\\\]", file)) {
-    bundled <- system.file("extdata", file, package = "Rfishmorph")
-    if (nzchar(bundled)) file <- bundled
+  # the package bundles anyway. An explicit path is neither campaign, and is
+  # labelled as such rather than inheriting the active one -- a table read from
+  # disk must not come back claiming to be the bundled segment table.
+  bundled <- is.null(file) || identical(file, "full")
+  if (bundled) file <- .fm_source_file(source)
+  else if (identical(file, "sample")) {
+    file <- "fishmorph_reference_sample.csv"
+    source <- "segment"
+    bundled <- TRUE
   }
-  if (!nzchar(file) || !file.exists(file))
+
+  bundled_name <- file
+  if (!file.exists(file) && !grepl("[/\\\\]", file)) {
+    from_pkg <- system.file("extdata", file, package = "Rfishmorph")
+    if (nzchar(from_pkg)) file <- from_pkg
+  }
+  if (!nzchar(file) || !file.exists(file)) {
+    hint <- if (identical(bundled_name, .fm_source_file("landmark")))
+      paste0("\n  The landmark table is a snapshot of an ongoing re-measurement:",
+             "\n  regenerate it with build_fishmorph_landmark_table().")
+    else ""
     stop("Reference table not found: ", file,
-         "\n  Pass an explicit path, or reinstall 'Rfishmorph'.", call. = FALSE)
+         "\n  Pass an explicit path, or reinstall 'Rfishmorph'.", hint,
+         call. = FALSE)
+  }
   ext <- tolower(tools::file_ext(file))
   if (ext %in% c("xlsx", "xls")) {
     if (!requireNamespace("readxl", quietly = TRUE))
@@ -63,8 +104,68 @@ load_fishmorph_reference <- function(file = NULL, sheet = NULL) {
       df <- utils::read.csv(file, sep = ",", dec = ".", check.names = FALSE,
                             stringsAsFactors = FALSE)
   }
+  # Provenance is stated out loud rather than inferred from the object: the two
+  # campaigns have identical columns but different species pools, so a silent
+  # load is exactly how one would end up comparing incomparable spaces.
+  if (!quiet) {
+    lbl <- if (!bundled) paste0("user file (", basename(file), ")")
+    else switch(source, landmark = "landmark (re-digitized)",
+                "segment (published)")
+    extra <- if ("n_imputed" %in% names(df))
+      sprintf(", %d with >=1 imputed ratio", sum(df$n_imputed > 0, na.rm = TRUE))
+    else ""
+    message(sprintf("FISHMORPH reference: %s -- %d species%s.",
+                    lbl, nrow(df), extra))
+  }
+  attr(df, "fishmorph_source") <- if (bundled) source else NA_character_
   df
 }
+
+# ---- source resolution ------------------------------------------------------
+
+.FM_SOURCE_FILES <- c(segment  = "fishmorph_data.csv",
+                      landmark = "fishmorph_data_landmarks.csv")
+
+.fm_source_file <- function(source) unname(.FM_SOURCE_FILES[[source]])
+
+# Resolve NULL to the session default. Kept in one place so that Rfishmorph,
+# intraitR and FishInTrait all answer the same question the same way.
+.fm_resolve_source <- function(source = NULL) {
+  if (is.null(source)) source <- getOption("fishmorph.source", "segment")
+  source <- match.arg(as.character(source)[1], names(.FM_SOURCE_FILES))
+  source
+}
+
+#' Choose the FISHMORPH measurement campaign for the session
+#'
+#' Sets `options(fishmorph.source = )`, the default consulted by
+#' [load_fishmorph_reference()], [fishmorph_space_data()],
+#' [project_fishmorph()] and the shiny explorers whenever their own `source`
+#' argument is left at `NULL`. Every function keeps an explicit `source`
+#' argument, which always wins: use the option to switch a whole script, the
+#' argument when a single call must be pinned regardless of the session state.
+#'
+#' @param source `"segment"` (published segment measurements, the package
+#'   default) or `"landmark"` (traits recomputed from the landmark
+#'   re-digitization).
+#' @return Invisibly, the previous value.
+#' @seealso [load_fishmorph_reference()], [get_fishmorph_source()],
+#'   [build_fishmorph_landmark_table()]
+#' @examples
+#' old <- set_fishmorph_source("segment")
+#' get_fishmorph_source()
+#' set_fishmorph_source(old)
+#' @export
+set_fishmorph_source <- function(source = c("segment", "landmark")) {
+  source <- match.arg(source)
+  old <- getOption("fishmorph.source", "segment")
+  options(fishmorph.source = source)
+  invisible(old)
+}
+
+#' @rdname set_fishmorph_source
+#' @export
+get_fishmorph_source <- function() .fm_resolve_source(NULL)
 
 #' Build the FISHMORPH functional trait space
 #'
@@ -75,7 +176,14 @@ load_fishmorph_reference <- function(file = NULL, sheet = NULL) {
 #' coordinate system.
 #'
 #' @param data A data frame of traits, or a `fishmorph_landmarks` object (its
-#'   ratios are computed first).
+#'   ratios are computed first). `NULL` (default) fits the space on the bundled
+#'   reference of the campaign named by `source`.
+#' @param source Which bundled table to fit when `data` is `NULL`: `"segment"`
+#'   or `"landmark"`. `NULL` (default) follows
+#'   `getOption("fishmorph.source", "segment")`, see [set_fishmorph_source()].
+#'   The PCA is refitted on the chosen table, so the two campaigns define two
+#'   distinct coordinate systems: axis order and sign may differ, and scores are
+#'   not comparable across campaigns without a Procrustes alignment.
 #' @param traits Character vector of trait columns. Defaults to the 9 FISHMORPH
 #'   ratios.
 #' @param groups Optional grouping vector (e.g. species) used by the plot method.
@@ -123,7 +231,8 @@ load_fishmorph_reference <- function(file = NULL, sheet = NULL) {
 #'                              na_action = "missforest_phylo")
 #' }
 #' @export
-fishmorph_trait_space <- function(data, traits = fishmorph_ratio_names(),
+fishmorph_trait_space <- function(data = NULL, source = NULL,
+                                  traits = fishmorph_ratio_names(),
                                   groups = NULL, log = FALSE, scale = TRUE,
                                   na_action = c("omit", "fail", "impute_mean",
                                                 "impute_group_mean", "missforest",
@@ -133,6 +242,10 @@ fishmorph_trait_space <- function(data, traits = fishmorph_ratio_names(),
                                   missforest_phylo_k = 10, phylo_axes = NULL,
                                   species = NULL) {
   na_action <- match.arg(na_action)
+  # No data: fit the space on the bundled table of the active campaign. The
+  # ordination is always refitted on whatever is supplied, so a "landmark"
+  # space is a genuinely new PCA, not a reprojection of the segment one.
+  if (is.null(data)) data <- load_fishmorph_reference(source = source)
   if (is_fishmorph_landmarks(data)) data <- fishmorph_ratios(data)
   miss <- setdiff(traits, names(data))
   if (length(miss))

@@ -1,3 +1,81 @@
+# Rfishmorph 0.5.0
+
+## The broken body axis, stated explicitly
+
+* `fishmorph_landmarks()` now pads to **25** points instead of 21
+  (`.FM_N_POINTS`): 19 anatomical landmarks, the scale bar 20-21, the curvature
+  hinge 22, the derived point 23 and the extra axis hinges 24-25. The digitizer
+  has been recording 25 points for a while, so the object was one shape and the
+  stored data another, and a configuration carrying hinges lost them on the way
+  in. `NA` means "not placed" and every routine skips it, so the wider frame
+  costs nothing.
+* `fishmorph_schema()` gains the labels of points 23-25 and an `axis_hinges`
+  element. It described a 22-point scheme while the data carried 25, which is
+  an odd thing for a single source of truth to do. `.fm_bl_broken()` now reads
+  `.FM_AXIS_HINGES` rather than a hard-coded vector, so scheme and computation
+  can no longer drift apart.
+* Confirmed and locked by tests: `Bl` is the arc length
+  `1 -> (hinges placed) -> 2`, hinges 22, 24 and 25 being treated identically
+  and **sorted along the 1-2 chord**, so the order in which they were clicked is
+  irrelevant. With no hinge the chain collapses to the straight 1-2 distance.
+* **Point 23 is not a hinge and never enters the chain.** It lies on the line
+  (1, 9), the ventral line running back from the snout, not on the body axis;
+  its purpose is the segment 23-6, the axial snout-to-head-base distance.
+  Inserting it into the chain sends the polyline down to the belly and back,
+  inflating `Bl` by a median 8.5% and up to 27% on the 650 species that carry
+  22, 23 and 24 — an error that would propagate to `BEl` and `PFs`, and
+  unevenly, since deep-bellied fishes suffer most. Measured on the current
+  data, not assumed, and now covered by `test-bl-axis.R`.
+
+## Two measurement campaigns, one API
+
+* The FISHMORPH traits now come in two flavours, and every function that reads
+  the global table lets you say which: `source = "segment"` is the published
+  table (`fishmorph_data.csv`, 8,970 species, ratios from the eleven segments
+  measured on the plates), `source = "landmark"` is `fishmorph_data_landmarks.csv`,
+  whose ratios are recomputed from the landmark re-digitization through
+  `fishmorph_segments()`. Added to `load_fishmorph_reference()`,
+  `fishmorph_space_data()`, `fishmorph_trait_space()`, `project_fishmorph()` and
+  `launch_fishmorph_space()`.
+* `set_fishmorph_source()` / `get_fishmorph_source()` set the session default
+  (`options(fishmorph.source = )`) consulted whenever `source` is left `NULL`.
+  The argument always wins over the option, so a script can pin one call
+  without disturbing the rest, and a shared script never depends on the state
+  of the session that runs it.
+* `load_fishmorph_reference()` now says out loud which campaign it loaded and
+  how many species it holds, and tags the result with
+  `attr(, "fishmorph_source")`. The landmark table covers **only the digitized
+  species**, so an analysis run on it describes a smaller pool than one run on
+  the segment table; that must not be discoverable only after the fact. Pass
+  `quiet = TRUE` to silence it.
+
+## Building the landmark table
+
+* `build_fishmorph_landmark_table()` assembles the landmark trait table from
+  the publication workbook (`Global_Landmark` sheet) and/or the digitizer
+  DuckDB store, following one homogeneous geometric path: landmarks ->
+  `fishmorph_segments()` -> `fishmorph_ratios()` -> imputation ->
+  `log10(x + 1)`. Species held by both stores are taken from DuckDB, the more
+  recent digitization. Taxonomy, `MBl`, `MBw` and `IUCN`, which no landmark can
+  yield, are joined from the segment table.
+* Ratios missing because a structure is absent or a specimen only partly
+  digitized are filled with `na_action = "missforest_phylo"` by default, on the
+  raw scale and on the precomputed phylogenetic PCoA axes, i.e. the same
+  coordinate system as every other imputation in the package. The per-species
+  `n_imputed` column keeps the count, so imputed species stay excludable.
+* `data-raw/build_fishmorph_landmark_table.R` regenerates the shipped snapshot
+  with a pinned seed and prints a segment-vs-landmark correlation table. Read
+  that table with care: the reconstruction imposes the segment *lengths*, so a
+  high correlation on the size ratios is a property of the construction and not
+  evidence of agreement. The position ratios `OGp`, `VEp` and `PFv` are where
+  the landmark campaign carries independent information.
+
+## Note on comparability
+
+* A "landmark" space is a **refitted** PCA, not a reprojection into the segment
+  space. Axis order and sign may differ between campaigns, and scores are not
+  comparable term by term without an explicit alignment.
+
 # Rfishmorph 0.4.0
 
 ## Coincident points: a measurement of zero
@@ -7,9 +85,16 @@
   a placement error -- and the FISHMORPH ratios are defined to take it:
   `OGp = 0` for a mouth opening on the ventral profile, `PFv = 0` for a pectoral
   fin inserted on the belly. Four rules: **`Mo = 0`** (9, and 23, take the
-  coordinates of 1), **`6 = 8`** (the bottom of the head is the body underside),
-  **`PFi = 0`** (10 takes the coordinates of 11) and **`5 = 13`** (an eye
-  reaching the top of the head).
+  coordinates of 1), **`6 = 8`** (the bottom of the head is the body underside,
+  and 23 follows 9), **`PFi = 0`** (10 takes the coordinates of 11) and
+  **`5 = 13`** (an eye reaching the top of the head).
+* That 23 follows 9 under `6 = 8` is a **consequence, not an extra convention**:
+  23 is the intersection of the line (1, 9) with the line through 6 parallel to
+  the head axis, and the belly line {9, 8, 11} is itself parallel to that axis,
+  so once 6 sits on the belly line that parallel IS the belly line and the
+  intersection is 9. Checked numerically, tilted photograph included: the
+  derivation lands on 9 to machine precision. The rule states it explicitly so
+  that it holds even when the derivation is degenerate.
 * **Nothing is deleted.** Both points keep a position, both are drawn on the
   photograph and both are written to the workbook; one simply takes the
   coordinates of the other, so the segment between them measures zero. A

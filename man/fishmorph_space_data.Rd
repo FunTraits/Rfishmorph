@@ -4,10 +4,18 @@
 \alias{fishmorph_space_data}
 \title{Path of the bundled FISHMORPH trait table}
 \usage{
-fishmorph_space_data()
+fishmorph_space_data(source = NULL)
+}
+\arguments{
+\item{source}{Which measurement campaign to point at: \code{"segment"} (the
+published table) or \code{"landmark"} (traits recomputed from the landmark
+re-digitization). \code{NULL} (default) follows
+\code{getOption("fishmorph.source", "segment")}, see \code{\link[=set_fishmorph_source]{set_fishmorph_source()}}.}
 }
 \value{
-A file path (character string).
+A file path (character string), or \code{""} when the requested table is
+not bundled -- which is the normal state of the landmark table until
+\code{\link[=build_fishmorph_landmark_table]{build_fishmorph_landmark_table()}} has been run.
 }
 \description{
 Returns the path of the CSV used by default by \code{\link[=launch_fishmorph_space]{launch_fishmorph_space()}},
@@ -21,4 +29,7 @@ applying one would distort the projection.
 \examples{
 p <- fishmorph_space_data()
 if (nzchar(p)) utils::head(utils::read.csv(p, sep = ";"), 3)
+}
+\seealso{
+\code{\link[=set_fishmorph_source]{set_fishmorph_source()}}, \code{\link[=load_fishmorph_reference]{load_fishmorph_reference()}}
 }

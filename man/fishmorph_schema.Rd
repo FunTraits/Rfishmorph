@@ -8,14 +8,24 @@ fishmorph_schema()
 }
 \value{
 A named list with elements \code{landmark_labels}, \code{segment_pairs},
-\code{segments}, \code{ratio_def}, \code{ratios}, \code{ratio_long}, \code{ratio_function} and
-\code{derived_points}.
+\code{segments}, \code{ratio_def}, \code{ratios}, \code{ratio_long}, \code{ratio_function},
+\code{derived_points} and \code{axis_hinges}.
 }
 \description{
 Returns the full scheme used throughout the package: landmark labels, the 11
 segment/landmark-pair map, the 9 ratio definitions and their ecological
 meaning. All numeric routines derive from these constants.
 }
+\section{Broken body axis}{
+
+Points 22, 24 and 25 are hinges, not anatomical landmarks. Body length \code{Bl}
+is the arc length along the chain 1 -> (hinges placed) -> 2, the hinges being
+sorted along the 1-2 chord so that the order in which they were clicked does
+not matter. With no hinge placed the chain collapses to the straight 1-2
+distance, which is the historical definition. All three are recorded like any
+other point; point 23 is derived and is \emph{not} a hinge.
+}
+
 \examples{
 str(fishmorph_schema())
 }

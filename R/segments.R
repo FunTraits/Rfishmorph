@@ -19,7 +19,7 @@
   if (!is.finite(Lc) || Lc == 0) return(NA_real_)
   placed <- function(i) i <= npt && all(is.finite(P[i, ])) &&
     (abs(P[i, 1]) + abs(P[i, 2]) > 0)
-  hs <- c(22L, 24L, 25L); hs <- hs[hs <= npt]
+  hs <- .FM_AXIS_HINGES; hs <- hs[hs <= npt]
   hs <- hs[vapply(hs, placed, logical(1))]
   if (length(hs))
     hs <- hs[order(vapply(hs, function(i) sum((P[i, ] - P[1, ]) * uc), numeric(1)))]

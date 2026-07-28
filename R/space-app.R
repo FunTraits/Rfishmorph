@@ -38,19 +38,25 @@
 #'   data set. Useful to work on a more recent version, or on the result of
 #'   [fishmorph_build_db()] exported to CSV. `NULL` uses the data set bundled
 #'   with the package.
+#' @param source Which measurement campaign to explore: `"segment"` or
+#'   `"landmark"`. `NULL` (default) follows
+#'   `getOption("fishmorph.source", "segment")`. Ignored when `data` is given.
 #' @param launch.browser Open in the default browser.
 #' @param ... Passed to [shiny::runApp()] (for example `port`).
 #' @return Invisibly `NULL`; called for its side effect.
 #' @seealso [launch_fishmorph_digitizer()] to produce the landmarks,
+#'   [set_fishmorph_source()],
 #'   [project_fishmorph()] to project specimens by computation rather than
 #'   interactively.
 #' @examples
 #' \dontrun{
 #' launch_fishmorph_space()
+#' launch_fishmorph_space(source = "landmark")
 #' launch_fishmorph_space(data = "my_traits.csv")
 #' }
 #' @export
-launch_fishmorph_space <- function(data = NULL, launch.browser = TRUE, ...) {
+launch_fishmorph_space <- function(data = NULL, source = NULL,
+                                   launch.browser = TRUE, ...) {
   .fm_require(.FMS_DEPS, "The morphological space explorer")
 
   appdir <- system.file("shiny", "fishmorph_space", package = "Rfishmorph")
@@ -58,6 +64,15 @@ launch_fishmorph_space <- function(data = NULL, launch.browser = TRUE, ...) {
     stop("Application not found in the package. Reinstall 'Rfishmorph'.",
          call. = FALSE)
 
+  if (is.null(data)) {
+    src <- .fm_resolve_source(source)
+    data <- fishmorph_space_data(src)
+    if (!nzchar(data))
+      stop("The \"", src, "\" table is not bundled with this installation.",
+           if (identical(src, "landmark"))
+             "\n  Build it first with build_fishmorph_landmark_table()." else "",
+           call. = FALSE)
+  }
   if (!is.null(data)) {
     if (!file.exists(data))
       stop("Data set not found: ", data, call. = FALSE)
@@ -77,10 +92,18 @@ launch_fishmorph_space <- function(data = NULL, launch.browser = TRUE, ...) {
 #' project new individuals therefore needs no further transformation, and
 #' applying one would distort the projection.
 #'
-#' @return A file path (character string).
+#' @param source Which measurement campaign to point at: `"segment"` (the
+#'   published table) or `"landmark"` (traits recomputed from the landmark
+#'   re-digitization). `NULL` (default) follows
+#'   `getOption("fishmorph.source", "segment")`, see [set_fishmorph_source()].
+#' @return A file path (character string), or `""` when the requested table is
+#'   not bundled -- which is the normal state of the landmark table until
+#'   [build_fishmorph_landmark_table()] has been run.
+#' @seealso [set_fishmorph_source()], [load_fishmorph_reference()]
 #' @examples
 #' p <- fishmorph_space_data()
 #' if (nzchar(p)) utils::head(utils::read.csv(p, sep = ";"), 3)
 #' @export
-fishmorph_space_data <- function()
-  system.file("extdata", "fishmorph_data.csv", package = "Rfishmorph")
+fishmorph_space_data <- function(source = NULL)
+  system.file("extdata", .fm_source_file(.fm_resolve_source(source)),
+              package = "Rfishmorph")

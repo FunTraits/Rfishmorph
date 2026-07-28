@@ -1,7 +1,7 @@
 Package: Rfishmorph
 Type: Package
 Title: Digitizing, Storing, Analysing and Exploring the FISHMORPH Database
-Version: 0.4.0
+Version: 0.5.0
 Authors@R: c(
     person("Aurele", "Toussaint", email = "aurele.toussaint@cnrs.fr",
            role = c("aut", "cre"), comment = c(affiliation = "CNRS")))
@@ -65,6 +65,7 @@ Suggests:
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
-URL: https://github.com/aureletoussaint/Rfishmorph
-BugReports: https://github.com/aureletoussaint/Rfishmorph/issues
+URL: https://github.com/FunTraits/Rfishmorph,
+    https://funtraits.github.io/Rfishmorph/
+BugReports: https://github.com/FunTraits/Rfishmorph/issues
 Config/roxygen2/version: 8.0.0

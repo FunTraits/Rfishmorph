@@ -1,10 +1,11 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
-
 # Rfishmorph
+
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/FunTraits/Rfishmorph/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/FunTraits/Rfishmorph/actions/workflows/R-CMD-check.yaml)
+[![test-coverage](https://github.com/FunTraits/Rfishmorph/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/FunTraits/Rfishmorph/actions/workflows/test-coverage.yaml)
+[![Codecov test coverage](https://codecov.io/gh/FunTraits/Rfishmorph/branch/main/graph/badge.svg)](https://codecov.io/gh/FunTraits/Rfishmorph)
+[![pkgdown](https://github.com/FunTraits/Rfishmorph/actions/workflows/pkgdown.yaml/badge.svg)](https://funtraits.github.io/Rfishmorph/)
+<!-- badges: end -->
 
 **Morphological traits, landmarks and quality control for the FISHMORPH
 database.**
@@ -36,7 +37,7 @@ pages with `devtools::document()`.
 ## The FISHMORPH scheme
 
 |  |  |  |
-|----|----|----|
+|------------------------|------------------------|------------------------|
 | **21 landmarks** | anatomical points digitized on a lateral photo | `fishmorph_schema()$landmark_labels` |
 | **11 segments** | `Bl, Bd, Hd, Eh, Mo, PFi, PFl, Ed, Jl, CPd, CFd` | `fishmorph_segment_names()` |
 | **9 ratios** | `BEl, VEp, REs, OGp, RMl, BLs, PFv, PFs, CPt` | `fishmorph_ratio_names()` |

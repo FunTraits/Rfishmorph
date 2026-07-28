@@ -6,3 +6,8 @@
 ^doc$
 ^Meta$
 ^dev/
+^\.github$
+^_pkgdown\.yml$
+^docs$
+^\.Rhistory$
+^codecov\.yml$
