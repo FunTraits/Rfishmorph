@@ -1,3 +1,87 @@
+# Rfishmorph 0.7.1
+
+## La base refusait le statut « adjusted », que le journal ecrit depuis 0.6.0
+
+* SYMPTOME : `fishmorph_build_db()` echouait sur
+  `CHECK constraint failed on table landmark_obs`, apres avoir pourtant lu et
+  valide tout le journal.
+* CAUSE : le vocabulaire des statuts est defini une fois, dans
+  `.FM_JOURNAL_STATUS` (R/journal.R), et vaut cinq valeurs -- `placed`,
+  `seeded`, `adjusted`, `derived`, `na`. Le DDL de la base en recopiait quatre,
+  a la main. Tant qu'aucune convention FISHMORPH n'avait rabattu un point,
+  personne ne voyait la difference ; depuis que 3 et 4 sont rabattus sur la
+  profondeur maximale et que 4 se projette sur l'axe median (0.6.0), la moitie
+  des specimens portent un point `adjusted`. Une contrainte SQL rejette le LOT
+  entier, donc un seul point suffisait a faire echouer une base de plusieurs
+  centaines de specimens, avec un message nommant une contrainte plutot qu'un
+  poisson.
+* Le CHECK est desormais CONSTRUIT depuis `.FM_JOURNAL_STATUS`, et le DDL
+  devient une fonction (`.fm_ddl()`) pour cela : R source les fichiers dans
+  l'ordre alphabetique, `database.R` precede `journal.R`, et une constante
+  aurait ete evaluee avant l'existence du vocabulaire. Les deux ne peuvent plus
+  diverger sans que le meme edit les touche tous les deux.
+* `v_specimen_qc` gagne `n_adjusted`. Une vue qui stocke un statut sans le
+  compter fait mentir ses propres totaux : la somme des colonnes ne valait plus
+  le nombre de points, ce qui est la meme derive un etage plus haut.
+* Verrouille par `tests/testthat/test-db-status.R` : un journal portant les
+  cinq statuts doit se construire, faire l'aller-retour et s'additionner.
+
+# Rfishmorph 0.7.0
+
+## Les applications s'ouvrent dans le navigateur, pas dans le Viewer
+
+* `shiny::runApp(launch.browser = TRUE)` finit dans `utils::browseURL()`, qui
+  passe par `options("browser")` -- que RStudio REMPLACE par un gestionnaire
+  gardant les URL localhost dans l'IDE. L'application atterrissait donc dans le
+  panneau Viewer : quelques centaines de pixels de large, sans barre
+  d'adresse, sans second onglet, et avec un moteur JavaScript qui n'est pas
+  celui pour lequel l'interface a ete ecrite. Ce n'est pas une affaire de gout :
+  une carte leaflet ou une figure plotly y sont inutilisables.
+* `launch.browser` accepte desormais quatre formes, avec le meme sens dans les
+  trois packages : `TRUE` (defaut) ou `"browser"` force le navigateur du
+  systeme ; `"viewer"` restitue le panneau a qui le prefere ; `FALSE` n'ouvre
+  rien et imprime l'URL ; une fonction est utilisee telle quelle.
+* Le gestionnaire « fenetre externe » de RStudio est cherche PAR NOM dans
+  `tools:rstudio`, jamais suppose : hors RStudio, nom disparu dans une version
+  future, environnement non attache -- chaque echec retombe sur `browseURL()`.
+  Un lanceur ne doit pas s'interrompre parce qu'un nom interne d'un autre
+  programme a bouge.
+
+# Rfishmorph 0.6.0
+
+## A coincidence with a LINE: point 4 on the mid axis
+
+* New rule in the *Coincident points* bar of `launch_fishmorph_digitizer()`:
+  **`4 on 22-24`**. Point 4, the ventral end of the body depth, is projected
+  perpendicularly onto the mid axis 22 -> 24. It keeps the abscissa that was
+  clicked along the axis and its height becomes zero; the line is not bounded by
+  the two hinges, so the foot of the perpendicular may fall on their
+  prolongation.
+* This is a second KIND of rule. The four existing ones state that two POINTS
+  coincide and are expressed as a copy of coordinates; this one states that a
+  point lies on a LINE and is expressed as a projection. `.FM_COLLAPSE` entries
+  therefore carry `moves` (copies) and/or `project` (projections), and
+  `.fm_apply_collapse()` gains a `kinds` argument to apply one family without
+  the other.
+* The order in the reconstruction follows from the geometry. Point 4 is the
+  master of the belly line, so the projection is applied BEFORE the constrained
+  editing -- 11, then 8 and 9, are re-derived from the projected 4 -- and
+  replayed at the end, where it is idempotent. Applied only at the end, as the
+  copies are, it would have left the belly line no longer passing through its
+  own pivot.
+* Declaring the rule SUSPENDS the ventral half of the extreme-point check on
+  save (`.fm_extreme_violations(skip = )`): 4 no longer claims to be the most
+  ventral point, so reporting 6, 10 or 14 below it would flag the rule itself.
+  The dorsal half, on 3, is untouched.
+* 4 stays in `edited` -- only its height is imposed, its position along the body
+  remains a measurement -- but is reported `"adjusted"` in the journal, since a
+  rule placed it. A copied point, which owes its partner everything, still has
+  its override taken over by the rule.
+* A projection leaves no pair of coincident points to be recognized by, so
+  reopening a specimen reads it back off the geometry (`.fm_collapse_detect()`,
+  0.5 px of the axis). A real belly sits at half the body depth from the
+  midline, some 12 % of the standard length, so the band is empty.
+
 # Rfishmorph 0.5.0
 
 ## The broken body axis, stated explicitly

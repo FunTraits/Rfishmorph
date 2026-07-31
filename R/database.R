@@ -62,7 +62,16 @@
   stringsAsFactors = FALSE
 )
 
-.FM_DDL <- c(
+# A FUNCTION and not a constant, for one reason: the status vocabulary belongs
+# to the journal (`.FM_JOURNAL_STATUS`, R/journal.R) and must be read from
+# there, but R sources the package files in alphabetical order and database.R
+# comes before journal.R -- a constant would be evaluated while the vocabulary
+# does not yet exist. Building the DDL at call time also makes the drift that
+# this file used to carry impossible: the CHECK listed four statuses while the
+# journal wrote five, so every specimen carrying an "adjusted" point -- i.e.
+# every one where a FISHMORPH convention snapped 3 or 4, or projected 4 onto
+# the mid axis since 0.6.0 -- broke the whole insertion batch.
+.fm_ddl <- function() c(
 # `mode` and `ts` are NULLABLE on purpose: a journal written by an earlier
 # version may not carry them. Better to record "unknown provenance" than to
 # refuse the data or, worse, invent a plausible value for it. The CHECK stays in
@@ -89,15 +98,16 @@
 # The composite PRIMARY KEY is the constraint that matters: it makes it
 # structurally impossible to have the same point twice for one specimen, which
 # no wide tabular format can guarantee.
+sprintf(
 "CREATE TABLE landmark_obs (
    specimen_id  VARCHAR  NOT NULL,
    landmark     SMALLINT NOT NULL CHECK (landmark BETWEEN 1 AND 25),
    x            DOUBLE,
    y            DOUBLE,
    status       VARCHAR  NOT NULL
-                CHECK (status IN ('placed','seeded','derived','na')),
+                CHECK (status IN (%s)),
    PRIMARY KEY (specimen_id, landmark)
- )"
+ )", paste(.fm_sql_str(.FM_JOURNAL_STATUS), collapse = ","))
 )
 
 .fm_sql_str <- function(x) paste0("'", gsub("'", "''", x), "'")
@@ -215,7 +225,7 @@ fishmorph_build_db <- function(journal_dir,
     if (!ok && !is.null(db_path) && file.exists(db_path)) unlink(db_path)
   }, add = TRUE)
 
-  for (ddl in .FM_DDL) DBI::dbExecute(con, ddl)
+  for (ddl in .fm_ddl()) DBI::dbExecute(con, ddl)
   DBI::dbAppendTable(con, "record", rec)
   DBI::dbAppendTable(con, "specimen", spe)
   DBI::dbAppendTable(con, "landmark_obs", obs)
@@ -285,10 +295,11 @@ fishmorph_build_db <- function(journal_dir,
 "CREATE OR REPLACE VIEW v_specimen_qc AS
  SELECT s.specimen_id, s.species, s.photo_file,
         r.ts, r.operator, r.mode,
-        COUNT(*) FILTER (WHERE o.status = 'placed')  AS n_placed,
-        COUNT(*) FILTER (WHERE o.status = 'seeded')  AS n_seeded,
-        COUNT(*) FILTER (WHERE o.status = 'derived') AS n_derived,
-        COUNT(*) FILTER (WHERE o.status = 'na')      AS n_na,
+        COUNT(*) FILTER (WHERE o.status = 'placed')   AS n_placed,
+        COUNT(*) FILTER (WHERE o.status = 'seeded')   AS n_seeded,
+        COUNT(*) FILTER (WHERE o.status = 'adjusted') AS n_adjusted,
+        COUNT(*) FILTER (WHERE o.status = 'derived')  AS n_derived,
+        COUNT(*) FILTER (WHERE o.status = 'na')       AS n_na,
         s.mm_per_px IS NOT NULL AS has_scale
  FROM specimen s
  JOIN record r USING (record_id)

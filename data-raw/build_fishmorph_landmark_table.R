@@ -13,7 +13,7 @@
 devtools::load_all(".")
 
 ## Adjust if the working copy of the database lives elsewhere.
-FM_ROOT <- normalizePath(file.path("..", "FishMORPH"), mustWork = FALSE)
+FM_ROOT <- "~/Library/CloudStorage/OneDrive-Personnel/iCloud Drive/00_Papier_5_EnProjet/Packages/00_Scripts/FishMORPH/FishMORPH"
 
 xlsx <- file.path(FM_ROOT, "FISHMORPH_PUBLI_9556sp_reconstructed.xlsx")
 db   <- file.path(FM_ROOT, "fishmorph.duckdb")

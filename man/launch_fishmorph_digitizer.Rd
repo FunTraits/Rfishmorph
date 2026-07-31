@@ -16,7 +16,8 @@ launch_fishmorph_digitizer(
   journal_dir = file.path(dirname(xlsx_path), "landmark_journal"),
   operator = NULL,
   xlsx_flush_every = 10L,
-  mode = c("reconstruct", "correct", "new")
+  mode = c("reconstruct", "correct", "new"),
+  launch.browser = TRUE
 )
 }
 \arguments{
@@ -61,6 +62,13 @@ reviewed/corrected: the 21 points are reloaded from the workbook) or
 "new" (new photographs from \code{new_photo_dir}, appended to \code{new_sheet}).
 Switchable at any moment through the "Queue" selector in the app. If the
 requested queue is empty, the app starts on another one.}
+
+\item{launch.browser}{Where the application opens. \code{TRUE} (default) or
+\code{"browser"} forces the system browser, past the RStudio Viewer pane --
+which is a few hundred pixels wide and the one place an application built
+for clicking nineteen points on a photograph must not open. \code{"viewer"}
+restores the pane, \code{FALSE} opens nothing and prints the URL, and a
+function is used as given.}
 }
 \value{
 Invisibly \code{NULL}; called for its side effect (it launches the app).
@@ -113,10 +121,24 @@ A bar under the photograph declares the segments that are ZERO on the species
 in view. A zero is a measurement like any other -- neither a missing value nor
 a placement error -- and the FISHMORPH ratios are defined to take it:
 \code{OGp = 0} for a mouth opening on the ventral profile, \code{PFv = 0} for a
-pectoral fin inserted on the belly. Four rules are offered: \code{Mo = 0} (9, and
+pectoral fin inserted on the belly. Five rules are offered: \code{Mo = 0} (9, and
 23, take the coordinates of 1), \code{6 = 8} (the bottom of the head is the body
-underside, and 23 follows 9), \code{PFi = 0} (10 takes the coordinates of 11) and
-\code{5 = 13} (an eye reaching the top of the head).
+underside, and 23 follows 9), \code{PFi = 0} (10 takes the coordinates of 11),
+\code{5 = 13} (an eye reaching the top of the head) and \verb{4 on 22-24} (the belly
+point of the body depth lies on the mid axis).
+
+The last one is of a different KIND: the partner is not a landmark but a
+LINE, so 4 is not copied onto anything, it is PROJECTED perpendicularly onto
+the segment 22-24 -- it keeps the abscissa the operator clicked along the
+axis and its height becomes zero. The line is not bounded by its two hinges:
+the foot of the perpendicular may fall on their prolongation, as everywhere
+else in the constrained editing. Because 4 is the master of the belly line,
+this rule is applied BEFORE the conventions rather than after them, so that
+11, then 8 and 9, are re-derived from the projected 4; it is replayed at the
+end, where it is idempotent. Declaring it also suspends the VENTRAL half of
+the extreme-point check on save: 4 no longer claims to be the most ventral
+point, so reporting 6, 10 or 14 below it would flag the rule itself. The
+dorsal half, on 3, is untouched.
 
 That 23 follows 9 under \code{6 = 8} is a consequence, not an extra convention.
 Point 23 is the intersection of the line (1, 9) with the line through 6

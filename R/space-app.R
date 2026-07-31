@@ -41,7 +41,10 @@
 #' @param source Which measurement campaign to explore: `"segment"` or
 #'   `"landmark"`. `NULL` (default) follows
 #'   `getOption("fishmorph.source", "segment")`. Ignored when `data` is given.
-#' @param launch.browser Open in the default browser.
+#' @param launch.browser Where the application opens. `TRUE` (default) or
+#'   `"browser"` forces the system browser, past the RStudio Viewer pane;
+#'   `"viewer"` restores the pane; `FALSE` opens nothing and prints the URL; a
+#'   function is used as given.
 #' @param ... Passed to [shiny::runApp()] (for example `port`).
 #' @return Invisibly `NULL`; called for its side effect.
 #' @seealso [launch_fishmorph_digitizer()] to produce the landmarks,
@@ -79,7 +82,7 @@ launch_fishmorph_space <- function(data = NULL, source = NULL,
     old <- options(Rfishmorph.space_data = normalizePath(data))
     on.exit(options(old), add = TRUE)
   }
-  shiny::runApp(appdir, launch.browser = launch.browser, ...)
+  shiny::runApp(appdir, launch.browser = .fm_browser(launch.browser), ...)
   invisible(NULL)
 }
 

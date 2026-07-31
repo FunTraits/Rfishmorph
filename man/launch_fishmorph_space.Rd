@@ -16,7 +16,10 @@ with the package.}
 \code{"landmark"}. \code{NULL} (default) follows
 \code{getOption("fishmorph.source", "segment")}. Ignored when \code{data} is given.}
 
-\item{launch.browser}{Open in the default browser.}
+\item{launch.browser}{Where the application opens. \code{TRUE} (default) or
+\code{"browser"} forces the system browser, past the RStudio Viewer pane;
+\code{"viewer"} restores the pane; \code{FALSE} opens nothing and prints the URL; a
+function is used as given.}
 
 \item{...}{Passed to \code{\link[shiny:runApp]{shiny::runApp()}} (for example \code{port}).}
 }

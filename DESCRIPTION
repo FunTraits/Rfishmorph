@@ -1,7 +1,7 @@
 Package: Rfishmorph
 Type: Package
 Title: Digitizing, Storing, Analysing and Exploring the FISHMORPH Database
-Version: 0.5.0
+Version: 0.7.1
 Authors@R: c(
     person("Aurele", "Toussaint", email = "aurele.toussaint@cnrs.fr",
            role = c("aut", "cre"), comment = c(affiliation = "CNRS")))

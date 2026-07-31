@@ -472,27 +472,115 @@
              tip = "10 takes the coordinates of 11: insertion on the ventral profile, PFv = 0"),
   EyeTop = list(moves = list(c(5L, 13L)),
                 label = "5 = 13 (eye at the head top)",
-                tip = "5 takes the coordinates of 13: the eye reaches the dorsal profile")
+                tip = "5 takes the coordinates of 13: the eye reaches the dorsal profile"),
+  # A second KIND of rule: not one point onto another, but one point onto a
+  # LINE. The statement is the same in nature -- a distance declared zero -- but
+  # the partner is the mid axis 22-24 rather than a landmark, so it is expressed
+  # as a PROJECTION and not as a copy of coordinates. 4 is the master of the
+  # belly line: putting it on the axis carries 11, then 8 and 9, with it.
+  Bd4 = list(moves = list(), project = 4L,
+             label = "4 on 22-24 (belly on the mid axis)",
+             tip = paste("4 is projected perpendicularly onto the line (22, 24):",
+                         "it keeps its abscissa along the axis, its height",
+                         "becomes zero, and 11 then 8/9 follow it"))
 )
+
+# ---- the mid axis, as the conventions themselves see it ---------------------
+# Frame of the MIDDLE segment, 22 -> 24, resolved EXACTLY as .fm_constrain()
+# resolves it -- 22 falling back to 1, 24 falling back to 2 when a hinge is not
+# placed. Reusing the same fallback is what guarantees that a point projected
+# here sits at height zero in the very frame the conventions then work in;
+# resolving it any other way would let the belly line be rebuilt in a frame
+# where 4 is no longer on the axis. NULL when the direction is degenerate.
+.fm_mid_frame <- function(P) {
+  fin <- function(i) i <= nrow(P) && all(is.finite(P[i, ]))
+  o   <- if (fin(22L)) P[22L, ] else if (fin(1L)) P[1L, ] else return(NULL)
+  tip <- if (fin(24L)) P[24L, ] else if (fin(2L)) P[2L, ] else return(NULL)
+  d <- tip - o; L <- sqrt(sum(d^2))
+  if (!is.finite(L) || L == 0) return(NULL)
+  d <- d / L
+  list(o = o, u = d, n = c(d[2], -d[1]))
+}
+# ORTHOGONAL projection onto that axis: the point keeps its abscissa and its
+# height is set to zero. The line is NOT bounded by 22 and 24 -- the foot of the
+# perpendicular may fall on the prolongation of the segment, exactly as
+# .fm_constrain() lets a point live outside the segment it is framed by.
+.fm_project_mid <- function(P, pt) {
+  if (pt > nrow(P) || !all(is.finite(P[pt, ]))) return(P)
+  fr <- .fm_mid_frame(P); if (is.null(fr)) return(P)
+  P[pt, ] <- fr$o + sum((P[pt, ] - fr$o) * fr$u) * fr$u
+  P
+}
+# Distance from a point to the mid axis, in pixels (NA when undefined): what a
+# projection rule reads back off the coordinates of a specimen saved earlier.
+.fm_dist_mid <- function(P, pt) {
+  if (pt > nrow(P) || !all(is.finite(P[pt, ]))) return(NA_real_)
+  fr <- .fm_mid_frame(P); if (is.null(fr)) return(NA_real_)
+  abs(sum((P[pt, ] - fr$o) * fr$n))
+}
+# Below this distance a point IS on the axis: the coordinates written to the
+# workbook are the projection itself, so only rounding separates them from it.
+.FM_PROJ_TOL <- 0.5
 
 # Apply the active rules, move by move and in order. A move whose reference is
 # not placed is skipped: a zero is only meaningful once the point it is measured
 # from exists. Order matters when several rules are on -- with both `Mo` and
 # `6 = 8`, 9 goes onto 1 first, so 23 then follows 9 to the same place.
-.fm_apply_collapse <- function(P, active) {
+# `kinds` selects which half of a rule is applied: the PROJECTIONS have to act
+# BEFORE the conventions (4 drives the belly line, so 11, 8 and 9 must be
+# re-derived from the projected 4), the point-to-point moves after them (see the
+# comment at the end of recon()).
+.fm_apply_collapse <- function(P, active, kinds = c("move", "project")) {
   if (is.null(P) || !length(active)) return(P)
-  for (nm in intersect(active, names(.FM_COLLAPSE)))
-    for (mv in .FM_COLLAPSE[[nm]]$moves) {
-      if (mv[1] > nrow(P) || mv[2] > nrow(P)) next
-      if (all(is.finite(P[mv[2], ]))) P[mv[1], ] <- P[mv[2], ]
-    }
+  for (nm in intersect(active, names(.FM_COLLAPSE))) {
+    r <- .FM_COLLAPSE[[nm]]
+    if ("project" %in% kinds && !is.null(r$project))
+      for (pt in r$project) P <- .fm_project_mid(P, pt)
+    if ("move" %in% kinds)
+      for (mv in r$moves) {
+        if (mv[1] > nrow(P) || mv[2] > nrow(P)) next
+        if (all(is.finite(P[mv[2], ]))) P[mv[1], ] <- P[mv[2], ]
+      }
+  }
   P
 }
-.fm_collapse_points <- function(active) {
+# The points a set of rules places. `kinds` separates the two families, and the
+# distinction is not cosmetic: a point COPIED onto another owes it everything,
+# so the rule takes over its position (its override is dropped); a PROJECTED
+# point keeps the abscissa the operator clicked and only surrenders its height,
+# so its override must survive -- dropping it would silently send 4 back to its
+# seeded position along the body.
+.fm_collapse_points <- function(active, kinds = c("move", "project")) {
   if (!length(active)) return(integer(0))
-  unlist(lapply(.FM_COLLAPSE[intersect(active, names(.FM_COLLAPSE))],
-                function(r) vapply(r$moves, function(m) m[1], integer(1))),
-         use.names = FALSE)
+  pts <- unlist(lapply(.FM_COLLAPSE[intersect(active, names(.FM_COLLAPSE))],
+                       function(r) c(
+                         if ("move" %in% kinds)
+                           vapply(r$moves, function(m) m[1], integer(1))
+                         else integer(0),
+                         if ("project" %in% kinds && !is.null(r$project))
+                           as.integer(r$project) else integer(0))),
+                use.names = FALSE)
+  if (is.null(pts)) integer(0) else pts
+}
+# The extreme-point convention a rule deliberately SUSPENDS. Declaring 4 on the
+# mid axis states that the ventral profile is not what 4 reads on this specimen;
+# the ventral half of the 3/4 test would then flag every point below the axis
+# (6, 10, 14 ...) on every save -- the rule working, not an error. The dorsal
+# half, on 3, is untouched and still holds.
+.fm_collapse_skip_extreme <- function(active) {
+  if ("Bd4" %in% active) 4L else integer(0)
+}
+# Read the projection rules back off the coordinates: a specimen reopened must
+# show the statement it was saved with, and a projection leaves no pair of
+# coincident points to recognize it by.
+.fm_collapse_detect <- function(P, tol = .FM_PROJ_TOL) {
+  if (is.null(P)) return(character(0))
+  nm <- names(.FM_COLLAPSE)
+  nm[vapply(.FM_COLLAPSE, function(r) {
+    if (is.null(r$project)) return(FALSE)
+    d <- vapply(r$project, function(pt) .fm_dist_mid(P, pt), numeric(1))
+    all(is.finite(d)) && all(d <= tol)
+  }, logical(1))]
 }
 
 # labels of the points, for the application's messages
@@ -537,23 +625,31 @@
 # Violations of the extreme-point convention. Returns NULL when everything is
 # compliant, otherwise a data.frame: `point` (3 or 4), `culprit` (the point
 # overshooting it), `delta` (the overshoot in pixels) and `kind` ("extreme").
-.fm_extreme_violations <- function(P, tol_frac = .FM_EXTREME_TOL) {
+# `skip` suspends the test on one side: a coincidence rule that puts 4 on the
+# mid axis makes the ventral half of the convention meaningless, and reporting
+# it would turn a declared statement into an alert on every save.
+.fm_extreme_violations <- function(P, tol_frac = .FM_EXTREME_TOL,
+                                   skip = integer(0)) {
   g <- .fm_body_frame(P); if (is.null(g)) return(NULL)
   tol  <- max(.FM_EXTREME_FLOOR, tol_frac * g$L)
   cand <- setdiff(seq_len(nrow(P)), c(3L, 4L, .FM_EXTREME_EXCLUDE))
   cand <- cand[is.finite(g$no[cand])]
   if (!length(cand)) return(NULL)
   out <- list()
-  d <- g$sgn * (g$no[cand] - g$no[3])           # overshoot on the DORSAL side
-  k <- which.max(d)
-  if (d[k] > tol) out[[length(out) + 1L]] <-
-    data.frame(point = 3L, culprit = cand[k], delta = unname(d[k]),
-               kind = "extreme", stringsAsFactors = FALSE)
-  d <- g$sgn * (g$no[4] - g$no[cand])           # overshoot on the VENTRAL side
-  k <- which.max(d)
-  if (d[k] > tol) out[[length(out) + 1L]] <-
-    data.frame(point = 4L, culprit = cand[k], delta = unname(d[k]),
-               kind = "extreme", stringsAsFactors = FALSE)
+  if (!(3L %in% skip)) {
+    d <- g$sgn * (g$no[cand] - g$no[3])         # overshoot on the DORSAL side
+    k <- which.max(d)
+    if (d[k] > tol) out[[length(out) + 1L]] <-
+      data.frame(point = 3L, culprit = cand[k], delta = unname(d[k]),
+                 kind = "extreme", stringsAsFactors = FALSE)
+  }
+  if (!(4L %in% skip)) {
+    d <- g$sgn * (g$no[4] - g$no[cand])         # overshoot on the VENTRAL side
+    k <- which.max(d)
+    if (d[k] > tol) out[[length(out) + 1L]] <-
+      data.frame(point = 4L, culprit = cand[k], delta = unname(d[k]),
+                 kind = "extreme", stringsAsFactors = FALSE)
+  }
   if (!length(out)) return(NULL)
   do.call(rbind, out)
 }
@@ -605,8 +701,9 @@
 # extremes come first, because they are the ones the automatic correction can
 # repair -- an inverted pair cannot be repaired by moving a point, only by
 # measuring it again.
-.fm_convention_violations <- function(P, tol_frac = .FM_EXTREME_TOL) {
-  v <- rbind(.fm_extreme_violations(P, tol_frac),
+.fm_convention_violations <- function(P, tol_frac = .FM_EXTREME_TOL,
+                                      skip = integer(0)) {
+  v <- rbind(.fm_extreme_violations(P, tol_frac, skip = skip),
              .fm_eye_order_violations(P, tol_frac))
   if (is.null(v) || !nrow(v)) NULL else v
 }
@@ -767,10 +864,24 @@
 #' in view. A zero is a measurement like any other -- neither a missing value nor
 #' a placement error -- and the FISHMORPH ratios are defined to take it:
 #' `OGp = 0` for a mouth opening on the ventral profile, `PFv = 0` for a
-#' pectoral fin inserted on the belly. Four rules are offered: `Mo = 0` (9, and
+#' pectoral fin inserted on the belly. Five rules are offered: `Mo = 0` (9, and
 #' 23, take the coordinates of 1), `6 = 8` (the bottom of the head is the body
-#' underside, and 23 follows 9), `PFi = 0` (10 takes the coordinates of 11) and
-#' `5 = 13` (an eye reaching the top of the head).
+#' underside, and 23 follows 9), `PFi = 0` (10 takes the coordinates of 11),
+#' `5 = 13` (an eye reaching the top of the head) and `4 on 22-24` (the belly
+#' point of the body depth lies on the mid axis).
+#'
+#' The last one is of a different KIND: the partner is not a landmark but a
+#' LINE, so 4 is not copied onto anything, it is PROJECTED perpendicularly onto
+#' the segment 22-24 -- it keeps the abscissa the operator clicked along the
+#' axis and its height becomes zero. The line is not bounded by its two hinges:
+#' the foot of the perpendicular may fall on their prolongation, as everywhere
+#' else in the constrained editing. Because 4 is the master of the belly line,
+#' this rule is applied BEFORE the conventions rather than after them, so that
+#' 11, then 8 and 9, are re-derived from the projected 4; it is replayed at the
+#' end, where it is idempotent. Declaring it also suspends the VENTRAL half of
+#' the extreme-point check on save: 4 no longer claims to be the most ventral
+#' point, so reporting 6, 10 or 14 below it would flag the rule itself. The
+#' dorsal half, on 3, is untouched.
 #'
 #' That 23 follows 9 under `6 = 8` is a consequence, not an extra convention.
 #' Point 23 is the intersection of the line (1, 9) with the line through 6
@@ -846,6 +957,12 @@
 #'   "new" (new photographs from `new_photo_dir`, appended to `new_sheet`).
 #'   Switchable at any moment through the "Queue" selector in the app. If the
 #'   requested queue is empty, the app starts on another one.
+#' @param launch.browser Where the application opens. `TRUE` (default) or
+#'   `"browser"` forces the system browser, past the RStudio Viewer pane --
+#'   which is a few hundred pixels wide and the one place an application built
+#'   for clicking nineteen points on a photograph must not open. `"viewer"`
+#'   restores the pane, `FALSE` opens nothing and prints the URL, and a
+#'   function is used as given.
 #' @return Invisibly `NULL`; called for its side effect (it launches the app).
 #' @seealso [fishmorph_consolidate()] to read the journal back,
 #'   [fishmorph_build_db()] to build the database from it,
@@ -872,7 +989,8 @@ launch_fishmorph_digitizer <- function(
     journal_dir = file.path(dirname(xlsx_path), "landmark_journal"),
     operator  = NULL,
     xlsx_flush_every = 10L,
-    mode      = c("reconstruct", "correct", "new")) {
+    mode      = c("reconstruct", "correct", "new"),
+    launch.browser = TRUE) {
 
   mode <- match.arg(mode)
   if (!exists("fm_journal_open", mode = "function"))
@@ -1248,10 +1366,10 @@ launch_fishmorph_digitizer <- function(
       shiny::checkboxInput("showlines", "Reference lines (outline/eye/belly)", TRUE),
       shiny::checkboxInput("fastdisp", "Fast display (lightened photograph)", TRUE),
       shiny::radioButtons("flip_mode", "Flip the photograph (+ landmarks)",
-        c("Aucun" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
+        c("None" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
         selected = "none", inline = TRUE),
       shiny::radioButtons("flip_disp", "Flip the photograph ONLY (landmarks fixed)",
-        c("Aucun" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
+        c("None" = "none", "Horizontal" = "h", "Vertical" = "v", "180" = "hv"),
         selected = "none", inline = TRUE),
       shiny::helpText("The second option flips ONLY the display of the",
                       "photograph: the landmarks (and the record) do not move.",
@@ -1570,6 +1688,24 @@ launch_fishmorph_digitizer <- function(
         if (all(is.finite(xy))) ov[[as.character(pt)]] <- xy
       }
       rv$override <- ov; rv$na <- na; rv$sel <- 22L  # hinge active on opening
+      # A PROJECTION rule leaves no pair of coincident points behind to be
+      # recognized by, unlike the copy rules: it has to be read off the geometry
+      # of the reloaded configuration, or reopening a specimen would silently
+      # drop a statement the operator made about it. The point itself is not
+      # touched -- it is already on the axis -- only its status and the tick box.
+      P0 <- matrix(NA_real_, 25L, 2L)
+      if (!is.null(rv$A)) P0[1L, ] <- rv$A
+      if (!is.null(rv$B)) P0[2L, ] <- rv$B
+      for (k in names(ov)) {
+        i <- suppressWarnings(as.integer(k))
+        if (!is.na(i) && i >= 1L && i <= 25L) P0[i, ] <- ov[[k]]
+      }
+      act <- .fm_collapse_detect(P0)
+      if (length(act)) {
+        rv$collapse <- act
+        shiny::updateCheckboxGroupInput(session, "collapse", selected = act)
+        rv$adjusted <- union(rv$adjusted, .fm_collapse_points(act))
+      }
     }
     # "new" mode: reloads a photograph already recorded in new_sheet. The scale
     # bar (20/21) is reloaded but is never marked NA -- it is
@@ -1663,13 +1799,23 @@ launch_fishmorph_digitizer <- function(
         # 10-12 is therefore not locked, only the parallelism is kept.
         pfl_px <- if (is_new() || !is.finite(ppu)) NA_real_
                   else as.numeric(seg$PFl) * ppu
+        # PROJECTIONS FIRST: `Bd4` moves 4, which is the MASTER of the belly
+        # line. Applied after the conventions it would leave 11, 8 and 9 derived
+        # from the position 4 held before the projection -- a belly line that no
+        # longer passes through its own pivot. Applied here, .fm_constrain()
+        # re-derives the whole ventral chain from the projected 4, and leaves it
+        # on the axis: nothing in the conventions changes its height in the mid
+        # frame (belly_line takes 4 as pivot, perp only ever resets its abscissa).
+        P <- .fm_apply_collapse(P, rv$collapse, kinds = "project")
         P <- .fm_constrain(P, rv$edited, pfl_px = pfl_px)
       }
       P[23, ] <- .fm_point23(P)     # 23 always recomputed (auto) after editing/conventions
       # LAST, after the conventions AND after 23 is rebuilt: the conventions
       # re-derive the ventral points on the belly line, and 23 -- built on the
       # line (1, 9) -- is undefined once 9 sits on 1. Applying the rules here is
-      # what puts 23 on 1 instead of leaving it NA.
+      # what puts 23 on 1 instead of leaving it NA. The projections are replayed
+      # too -- idempotent when they have already acted, and this is the only pass
+      # there is when the constrained editing is switched off.
       .fm_apply_collapse(P, rv$collapse)
     })
 
@@ -1681,8 +1827,12 @@ launch_fishmorph_digitizer <- function(
       moved <- .fm_collapse_points(rv$collapse)
       released <- setdiff(.fm_collapse_points(names(.FM_COLLAPSE)), moved)
       rv$adjusted <- union(setdiff(rv$adjusted, released), moved)
-      rv$edited   <- setdiff(rv$edited, moved)
-      rv$override[as.character(moved)] <- NULL   # the rule drives them now
+      # ONLY the copied points are taken over by the rule. A projected point (4
+      # on the axis) keeps its click: the rule sets its height, not its abscissa,
+      # so dropping its override would move it along the body as well.
+      copied <- .fm_collapse_points(rv$collapse, kinds = "move")
+      rv$edited <- setdiff(rv$edited, copied)
+      if (length(copied)) rv$override[as.character(copied)] <- NULL
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
     output$collapse_help <- shiny::renderUI({
@@ -1690,8 +1840,9 @@ launch_fishmorph_digitizer <- function(
       txt <- if (!length(act))
         paste("A segment that is genuinely zero on this species -- a mouth on",
               "the ventral profile, a head ending on it. One point takes the",
-              "coordinates of the other: both stay on the photograph and in the",
-              "workbook. Re-applied after every click, reset for each species.")
+              "coordinates of the other, or is projected onto the mid axis:",
+              "both stay on the photograph and in the workbook. Re-applied",
+              "after every click, reset for each species.")
       else paste("Active:", paste(vapply(.FM_COLLAPSE[act], function(r) r$tip,
                                          character(1)), collapse = " | "))
       shiny::div(style = "font-size:11.5px;color:#92400e;margin-top:2px;", txt)
@@ -2011,10 +2162,14 @@ launch_fishmorph_digitizer <- function(
     # conventions may move points again (the belly line in particular), so we
     # iterate to stability -- 3 passes are ample, and the bound rules out an
     # infinite loop on a pathological case.
+    # the checks a declared coincidence suspends -- recomputed at every call, a
+    # rule being ticked and unticked while the specimen is on screen
+    conv_skip <- function() .fm_collapse_skip_extreme(rv$collapse)
+
     apply_conv_fix <- function() {
       for (it in 1:3) {
         P <- recon()
-        v <- .fm_extreme_violations(P)
+        v <- .fm_extreme_violations(P, skip = conv_skip())
         if (is.null(v)) return(invisible(TRUE))
         Pf <- .fm_fix_extremes(P, v)
         ov <- rv$override
@@ -2026,13 +2181,13 @@ launch_fishmorph_digitizer <- function(
         rv$edited   <- union(rv$edited, v$point)
         rv$adjusted <- union(rv$adjusted, v$point)
       }
-      invisible(is.null(.fm_extreme_violations(recon())))
+      invisible(is.null(.fm_extreme_violations(recon(), skip = conv_skip())))
     }
 
     shiny::observeEvent(input$save, {
       shiny::req(rv$A, rv$B)
       if (isTRUE(input$checkextremes)) {
-        v <- .fm_convention_violations(recon())
+        v <- .fm_convention_violations(recon(), skip = conv_skip())
         if (!is.null(v)) { show_conv_modal(v); return() }
       }
       do_save()
@@ -2043,7 +2198,7 @@ launch_fishmorph_digitizer <- function(
     #    the wrong side -- not the reference it was compared with.
     shiny::observeEvent(input$conv_remeasure, {
       shiny::removeModal()
-      v <- .fm_convention_violations(recon())
+      v <- .fm_convention_violations(recon(), skip = conv_skip())
       if (!is.null(v)) {
         rv$sel <- if (identical(v$kind[1], "order")) v$culprit[1] else v$point[1]
         zoom_to_sel()
@@ -2362,7 +2517,11 @@ launch_fishmorph_digitizer <- function(
     })
   }
 
-  shiny::runApp(shiny::shinyApp(ui, server))
+  # Digitizing means clicking nineteen points on a photograph: the RStudio
+  # Viewer pane, a few hundred pixels wide, is the one place this application
+  # must not open. `.fm_browser()` forces the system browser past it.
+  shiny::runApp(shiny::shinyApp(ui, server),
+                launch.browser = .fm_browser(launch.browser))
 }
 
 # -----------------------------------------------------------------------------
