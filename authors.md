@@ -11,13 +11,13 @@ Source:
 [`DESCRIPTION`](https://github.com/FunTraits/Rfishmorph/blob/main/DESCRIPTION)
 
 Toussaint A (2026). *Rfishmorph: Digitizing, Storing, Analysing and
-Exploring the FISHMORPH Database*. R package version 0.5.0,
+Exploring the FISHMORPH Database*. R package version 0.7.1,
 <https://github.com/FunTraits/Rfishmorph>.
 
     @Manual{,
       title = {Rfishmorph: Digitizing, Storing, Analysing and Exploring the FISHMORPH Database},
       author = {Aurele Toussaint},
       year = {2026},
-      note = {R package version 0.5.0},
+      note = {R package version 0.7.1},
       url = {https://github.com/FunTraits/Rfishmorph},
     }

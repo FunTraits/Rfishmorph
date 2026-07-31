@@ -29,7 +29,10 @@ launch_fishmorph_space(data = NULL, source = NULL, launch.browser = TRUE, ...)
 
 - launch.browser:
 
-  Open in the default browser.
+  Where the application opens. `TRUE` (default) or `"browser"` forces
+  the system browser, past the RStudio Viewer pane; `"viewer"` restores
+  the pane; `FALSE` opens nothing and prints the URL; a function is used
+  as given.
 
 - ...:
 
