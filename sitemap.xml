@@ -21,9 +21,11 @@
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/correct_geometry_conventions.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/correct_landmark_order.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/correct_zero_ratio_landmarks.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_basin_indices.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_consolidate.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_db_connect.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_fishbase_size.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_journal_qc.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_landmark_pairs.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fishmorph_landmarks.html</loc></url>
@@ -49,6 +51,7 @@
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/impute_traits.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/index.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/is_fishmorph_landmarks.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_basins.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_reconstructor.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_space.html</loc></url>
@@ -63,12 +66,14 @@
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_segment_landmark_agreement.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_trait_distributions.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_trait_space.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/prepare_fishmorph_basins.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/project_fishmorph.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/read_landmarks_csv.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/reconstruct_fishmorph_landmarks.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/reset_group_colors.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/set_fishmorph_source.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/standardize_geometry.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/summary.fishmorph_comparison.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/update_fishmorph_taxonomy.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/validate_species_names.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/write_landmarks_csv.html</loc></url>

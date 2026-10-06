@@ -13,7 +13,7 @@ with load_fishmorph_reference()'s source argument."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">Rfishmorph</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,7 +53,10 @@ with <code><a href="load_fishmorph_reference.html">load_fishmorph_reference()</a
 <span>  xlsx <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  db <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sheet <span class="op">=</span> <span class="st">"Global_Landmark"</span>,</span>
+<span>  new_sheet <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"New_specimen"</span>, <span class="st">"new_specimens"</span><span class="op">)</span>,</span>
 <span>  metadata <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  fishbase_size <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  impute_size <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  na_action <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"missforest_phylo"</span>, <span class="st">"missforest"</span>, <span class="st">"impute_mean"</span>, <span class="st">"impute_group_mean"</span>,</span>
 <span>    <span class="st">"omit"</span>, <span class="st">"keep"</span><span class="op">)</span>,</span>
 <span>  log <span class="op">=</span> <span class="cn">TRUE</span>,</span>
@@ -84,7 +87,28 @@ digitization.</p></dd>
 
 
 <dt id="arg-sheet">sheet<a class="anchor" aria-label="anchor" href="#arg-sheet"></a></dt>
-<dd><p>Landmark sheet name in <code>xlsx</code> (default <code>"Global_Landmark"</code>).</p></dd>
+<dd><p>Landmark sheet(s) in <code>xlsx</code> holding the PUBLISHED specimens
+(default <code>"Global_Landmark"</code>).</p></dd>
+
+
+<dt id="arg-new-sheet">new_sheet<a class="anchor" aria-label="anchor" href="#arg-new-sheet"></a></dt>
+<dd><p>Sheet(s) of <code>xlsx</code> holding the specimens digitized SINCE the
+publication – species absent from FISHMORPH, entered either through the
+digitizer's "new" queue or through the "Absent from FISHMORPH" panel of
+FishInTrait. Both spellings in use are looked for by default; those the
+workbook does not carry are simply skipped. <code>NULL</code> ignores them, which is
+the behaviour of the versions before this argument existed. A species
+present in both <code>sheet</code> and <code>new_sheet</code> keeps its <code>sheet</code> record: the new
+sheets are a STAGING AREA, promoted to <code>Global_Landmark</code> once validated,
+so a duplicate means the promotion has already happened and the staged row
+is the stale one. The <code>store</code> column of the returned table names the
+origin (<code>"xlsx"</code>, <code>"xlsx_new"</code> or <code>"duckdb"</code>), so a table built on
+unvalidated specimens can always be traced back. Mind that one row of a
+staging sheet is one PHOTOGRAPH and not one species – several specimens
+of the same species are the point of the plate mode – whereas this table
+is one row per species: the first row met is kept and the others are
+dropped, without averaging. Pooling repeated specimens is a decision about
+the campaign, not a detail of the reading.</p></dd>
 
 
 <dt id="arg-metadata">metadata<a class="anchor" aria-label="anchor" href="#arg-metadata"></a></dt>
@@ -95,6 +119,40 @@ simply where they are stored. The join is restricted to that whitelist, so
 no ratio can cross over even if the supplied table carries some. This
 argument is deliberately <em>not</em> called <code>reference</code>: it does not define the
 trait space and plays no part in the segments, ratios or imputation.</p></dd>
+
+
+<dt id="arg-fishbase-size">fishbase_size<a class="anchor" aria-label="anchor" href="#arg-fishbase-size"></a></dt>
+<dd><p>Fill the <code>MBl</code> / <code>MBw</code> the metadata table cannot supply
+from FishBase, through <code><a href="fishmorph_fishbase_size.html">fishmorph_fishbase_size()</a></code> (default <code>FALSE</code>:
+it needs the network and the <code>rfishbase</code> package). A species digitized
+since the publication is by construction absent from the segment table,
+where those two columns live, so it comes out sized <code>NA</code> – and
+<code><a href="prepare_fishmorph_basins.html">prepare_fishmorph_basins()</a></code> runs <code><a href="https://rdrr.io/r/stats/complete.cases.html" class="external-link">complete.cases()</a></code> over the ratios AND
+<code>size_traits</code>, which drops it from the functional space altogether. The
+maximum STANDARD length and the maximum weight are converted to
+<code>log10(x + 1)</code>, the scale of the rest of the table. An existing value is
+never overwritten, and the added <code>size_source</code> column
+(<code>"fishmorph_publi"</code> / <code>"fishbase"</code>) keeps the two apart – without it a
+derived size becomes indistinguishable from a published one at the next
+read, and the origin of a point in the ordination is lost.</p></dd>
+
+
+<dt id="arg-impute-size">impute_size<a class="anchor" aria-label="anchor" href="#arg-impute-size"></a></dt>
+<dd><p>Impute the <code>MBl</code> / <code>MBw</code> still missing after the metadata
+join and, if asked for, after FishBase (default <code>TRUE</code>). A SECOND pass,
+run with the same <code>na_action</code>, in which the nine ratios – complete by
+then – and the phylogenetic axes predict the size, and nothing predicts
+the ratios back: the values already in the table are left bit for bit as
+they were. <code>"keep"</code> and <code>"omit"</code> are not honoured here, the first because
+it means leaving the gaps and the second because dropping a species for
+want of a size is a decision for the analysis, not for the reading.
+Imputed sizes are marked <code>size_source = "imputed"</code>, and they should be:
+an invented body length weighs on the first axis exactly like a measured
+one, and no other column tells them apart. One column cannot describe two:
+<code>size_source</code> records the last operation that touched EITHER of <code>MBl</code> and
+<code>MBw</code>. In practice the two are missing together – both come from the same
+join, and the current table has exactly 466 of each – so the ambiguity is
+theoretical; split it into two columns if that ever stops holding.</p></dd>
 
 
 <dt id="arg-na-action">na_action<a class="anchor" aria-label="anchor" href="#arg-na-action"></a></dt>
@@ -123,8 +181,10 @@ matching <code>fishmorph_data.csv</code>. Imputation always runs on the raw scal
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with <code>Species, Family, Order, Genus</code>, the nine ratios,
-<code>MBl</code>, <code>MBw</code>, <code>IUCN</code>, plus the provenance columns <code>store</code> (<code>"xlsx"</code> or
-<code>"duckdb"</code>) and <code>n_imputed</code>.</p>
+<code>MBl</code>, <code>MBw</code>, <code>IUCN</code>, plus the provenance columns <code>store</code> (<code>"xlsx"</code>,
+<code>"xlsx_new"</code> or <code>"duckdb"</code>), <code>size_source</code> (<code>"fishmorph_publi"</code>,
+<code>"fishbase"</code> or <code>"imputed"</code>) and <code>n_imputed</code>. <code>n_imputed</code> counts RATIOS
+only: a size that was imputed is reported by <code>size_source</code>, not by it.</p>
     </div>
     <div class="section level2">
     <h2 id="independence-from-the-segment-table">Independence from the segment table<a class="anchor" aria-label="anchor" href="#independence-from-the-segment-table"></a></h2>

@@ -112,4 +112,4 @@ of the concordance between the two configurations (`correlation`,
 ## See also
 
 [`plot_segment_landmark_agreement()`](https://funtraits.github.io/Rfishmorph/reference/plot_segment_landmark_agreement.md),
-`summary.fishmorph_comparison()`
+[`summary.fishmorph_comparison()`](https://funtraits.github.io/Rfishmorph/reference/summary.fishmorph_comparison.md)

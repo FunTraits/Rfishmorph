@@ -23,7 +23,8 @@ fishmorph_validate(x, expect = c(1:19, 22L, 23L), bounds = .FM_RATIO_BOUNDS)
 
 - bounds:
 
-  Envelope of the ratios (default: .FM_RATIO_BOUNDS).
+  Envelope of the ratios. Defaults to the internal table
+  `.FM_RATIO_BOUNDS` (not exported, hence not linkable).
 
 ## Value
 

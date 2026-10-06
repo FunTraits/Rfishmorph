@@ -252,6 +252,9 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 - [`correct_zero_ratio_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/correct_zero_ratio_landmarks.md)
   : Apply the "zero-ratio" conventions to landmarks
 
+- [`fishmorph_basin_indices()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_basin_indices.md)
+  : Functional-diversity indices of one assemblage
+
 - [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)
   : Rebuild the DuckDB database from the journals
 
@@ -260,6 +263,9 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 
 - [`fishmorph_db_connect()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_db_connect.md)
   : Open the database (read-only by default)
+
+- [`fishmorph_fishbase_size()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_fishbase_size.md)
+  : Maximum standard length and weight from FishBase
 
 - [`fishmorph_journal_qc()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_journal_qc.md)
   : Quick quality control of a consolidation
@@ -333,6 +339,9 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 - [`is_fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/is_fishmorph_landmarks.md)
   : Test whether an object is a landmark configuration
 
+- [`launch_fishmorph_basins()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_basins.md)
+  : Global drainage-basin explorer
+
 - [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
   : Interactive tool for digitizing the FISHMORPH landmarks
 
@@ -376,6 +385,10 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 - [`plot_trait_space()`](https://funtraits.github.io/Rfishmorph/reference/plot_trait_space.md)
   : Plot the FISHMORPH functional trait space (intraitR style)
 
+- [`prepare_fishmorph_basins()`](https://funtraits.github.io/Rfishmorph/reference/prepare_fishmorph_basins.md)
+  [`print(`*`<fishmorph_basin_cache>`*`)`](https://funtraits.github.io/Rfishmorph/reference/prepare_fishmorph_basins.md)
+  : Build the cache read by the basin explorer
+
 - [`project_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/project_fishmorph.md)
   : Project specimens into the global FISHMORPH functional space
 
@@ -395,6 +408,9 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 - [`standardize_geometry()`](https://funtraits.github.io/Rfishmorph/reference/standardize_geometry.md)
   : Standardize landmark geometry (rescale, translate, optionally
   orient)
+
+- [`summary(`*`<fishmorph_comparison>`*`)`](https://funtraits.github.io/Rfishmorph/reference/summary.fishmorph_comparison.md)
+  : Summary of a segment-versus-landmark comparison
 
 - [`update_fishmorph_taxonomy()`](https://funtraits.github.io/Rfishmorph/reference/update_fishmorph_taxonomy.md)
   : Update the taxonomy of a FISHMORPH table

@@ -15,7 +15,7 @@ discarded when read).'></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">Rfishmorph</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,7 +65,10 @@ discarded when read).</p>
 <span>  img_w <span class="op">=</span> <span class="cn">NA</span>,</span>
 <span>  img_h <span class="op">=</span> <span class="cn">NA</span>,</span>
 <span>  ruler_mm <span class="op">=</span> <span class="cn">NA</span>,</span>
-<span>  mm_per_px <span class="op">=</span> <span class="cn">NA</span></span>
+<span>  mm_per_px <span class="op">=</span> <span class="cn">NA</span>,</span>
+<span>  quality_score <span class="op">=</span> <span class="cn">NA</span>,</span>
+<span>  reviewed <span class="op">=</span> <span class="cn">NA</span>,</span>
+<span>  collapse <span class="op">=</span> <span class="cn">NA</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -95,6 +98,22 @@ discarded when read).</p>
 
 <dt id="arg-species-photo-file-mode-target-sheet-img-w-img-h-ruler-mm-mm-per-px">species, photo_file, mode, target_sheet, img_w, img_h, ruler_mm, mm_per_px<a class="anchor" aria-label="anchor" href="#arg-species-photo-file-mode-target-sheet-img-w-img-h-ruler-mm-mm-per-px"></a></dt>
 <dd><p>Metadata.</p></dd>
+
+
+<dt id="arg-quality-score">quality_score<a class="anchor" aria-label="anchor" href="#arg-quality-score"></a></dt>
+<dd><p>Operator's rating of the entry, 1 (poor) to 5
+(excellent), or NA if the specimen was not rated.</p></dd>
+
+
+<dt id="arg-reviewed">reviewed<a class="anchor" aria-label="anchor" href="#arg-reviewed"></a></dt>
+<dd><p>TRUE if the operator declared the specimen checked, FALSE if
+not, NA if unknown. Repeated on every point line of the record.</p></dd>
+
+
+<dt id="arg-collapse">collapse<a class="anchor" aria-label="anchor" href="#arg-collapse"></a></dt>
+<dd><p>Coincidences declared on the specimen (segments measuring
+zero), as a character vector of rule identifiers or a single ";"-joined
+string. NA or empty: none declared.</p></dd>
 
 </dl></div>
     <div class="section level2">
