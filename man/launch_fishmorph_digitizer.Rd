@@ -32,11 +32,19 @@ on it (species already recorded are excluded from the queue).}
 \item{seg_sheet, lm_sheet}{Sheet names.}
 
 \item{new_sheet}{Sheet the NEW specimens are appended to ("new" mode).
-Created (with the headers of \code{lm_sheet}) if it does not exist.}
+Created (with the headers of \code{lm_sheet}) if it does not exist. Its rows
+ALSO feed the "correct" queue, so a species entered here -- through the
+"new" queue or through the "Absent from FISHMORPH" panel of FishInTrait --
+can be reopened and corrected instead of staying invisible until someone
+promotes it to \code{lm_sheet}. Corrections go back to the sheet the row came
+from. NAME IT AS THE WORKBOOK DOES: the match is exact, and a workbook
+carrying \code{New_specimen} opened with the default \code{"new_specimens"} gets a
+SECOND, empty sheet rather than the one it already has.}
 
 \item{new_photo_dir}{Folder of the new specimens' photographs ("new" mode).
 Every image in the folder forms the queue. It may not exist: the "new"
-mode is then simply unavailable.}
+mode is then simply unavailable until the "New species" page puts a
+photograph in it, which creates the folder.}
 
 \item{ruler_mm}{Real length (mm) of the scale bar digitized by points 20 and
 21 in "new" mode. Can be changed in the app, specimen by specimen.}
@@ -57,8 +65,9 @@ the session), are written at the end of the session, by the dedicated
 button, and are in the journal in any case. 1 = the historical behaviour}
 
 \item{mode}{Starting queue: "reconstruct" (species WITHOUT landmarks, to be
-digitized from the segments), "correct" (species ALREADY landmarked, to be
-reviewed/corrected: the 21 points are reloaded from the workbook) or
+digitized from the segments), "correct" (specimens ALREADY landmarked, on
+\code{lm_sheet} OR on \code{new_sheet}, to be reviewed/corrected: the 21 points are
+reloaded from the workbook) or
 "new" (new photographs from \code{new_photo_dir}, appended to \code{new_sheet}).
 Switchable at any moment through the "Queue" selector in the app. If the
 requested queue is empty, the app starts on another one.}
@@ -170,6 +179,19 @@ since moving 13 would change \code{Ed}, a measurement in its own right. Points
 moved by a rule take the \code{"adjusted"} status in the journal, and the
 declarations are reset for every species.
 
+A declaration is SAVED with the specimen, in the column \code{collapse_rules} of
+the target sheet and in the journal, as the list of rule identifiers
+(\code{"Mo;Hd6"}). Reopening the specimen puts the boxes back. It has to be
+written down as such: a copy rule leaves nothing in the coordinates that
+distinguishes it from a chance coincidence, and an unticked box cannot be
+told from a box that was never ticked. Before this column existed the
+statement lived only in the geometry it produced, so a reopened specimen came
+back with its points collapsed but its boxes empty -- and the first click,
+with the rule no longer applied, quietly undid the zero. For everything
+entered then, and for any table coming from elsewhere, the rules are still
+read back off the coordinates -- a pair of coincident points, a point on the
+mid axis -- and the two readings are unioned.
+
 The same box also checks the ORDER of the eye vertical. The six points 5, 13,
 7, 14, 6, 8 are placed on one vertical by the FISHMORPH conventions, and
 anatomy fixes their order along it, from the back downwards: top of the head,
@@ -182,6 +204,100 @@ coordinate table: each pair stays internally consistent, \code{Ed} (13-14) keeps
 its length, while \code{Eh} (7-8) silently refers to the wrong edge of the eye.
 An inversion is reported but \strong{never corrected automatically}: moving a
 point to satisfy the order would invent a measurement rather than repair one.
+}
+
+\section{Quality and review of an entry}{
+
+The \code{"Quality"} tab of the side panel carries two fields the coordinates
+cannot express: a SCORE from 1 (unusable, landmarks largely guessed) to 5
+(excellent -- whole fish, strictly lateral, every landmark unambiguous), and
+a TICK declaring the specimen checked. They answer two different questions,
+hence two fields: how good the entry is, and whether anyone has actually
+looked at it. A specimen can perfectly well be checked AND poor -- that is
+the state a re-photographing list is built from.
+
+\code{"Not scored"} and an empty cell are the same statement, and neither is a
+score of zero. Both fields are reloaded with the specimen and rewritten at
+every save, so returning to a species and saving it again preserves the
+review it already carries; the author and the date are stamped only when
+something is actually declared, otherwise "nobody has looked at it" would be
+indistinguishable from "somebody looked and said nothing".
+
+They are written to four columns of the target sheet -- \code{quality_score},
+\code{reviewed}, \code{reviewed_by}, \code{review_date}, created on the fly like the hinge
+columns, next to the \code{collapse_rules} of the declared coincidences -- and, at
+record level, to the journal, from which
+\code{\link[=fishmorph_consolidate]{fishmorph_consolidate()}} brings them back. The journal already said how each
+POINT was obtained (\code{placed}, \code{seeded}, \code{derived}...); this says what the
+ENTRY as a whole is worth, which only the operator looking at the photograph
+can decide.
+}
+
+\section{Bringing a new photograph in ("New species" page)}{
+
+Until now a photograph entered a session only by being dropped into
+\code{new_photo_dir} from a file manager, before launch, under whatever name the
+camera had given it. That is not a detail of housekeeping: the file name is
+the ONLY identity an image has before it is measured -- the species is read
+off it (\code{.fm_name_from_file()}) and the workbook rows are matched on it -- so
+the step belongs to the protocol and it belongs in the application.
+
+The second tab of the main panel does it in four moves, in the only order
+that is safe. \strong{Browse} for the file (JPEG, PNG, GIF, BMP or TIFF; the real
+format is read from the magic bytes, not from the extension, since about
+7 per cent of the \code{.jpg} of this collection are not JPEG). \strong{Name} the
+specimen \verb{Genus species}, pre-filled from the file name and checkable against
+FishBase. \strong{Frame} it -- quarter turns, mirrors, and a crop drawn with the
+mouse on the preview. \strong{Commit}, which writes the picture and opens it
+straight away in the \code{"new"} queue.
+
+The framing comes before the first click and must never come after it. The
+digitizer records coordinates in the pixels OF THE FILE, so cropping or
+rotating a photograph that already carries landmarks would move every one of
+them without touching a single recorded number. This page is the one place
+where the geometry of an image may still change, and it is upstream of the
+first click by construction. Quarter turns and crops are exact array
+operations, lossless by nature; the output format follows the real bytes of
+the source, so a PNG stays a PNG rather than acquiring JPEG artefacts on the
+very pixels the landmarks are read on.
+
+The copy is named \verb{Genus_species.<ext>}, suffixed \verb{_2}, \verb{_3}... when the
+folder already holds that species -- a SPECIMEN counter, not a duplicate
+marker: the \code{"new"} queue is one entry per PHOTOGRAPH, several specimens of
+one species are legitimate, and both readers of the file name strip a
+trailing number, so all of them come back to the same binomial. The file the
+operator selected is left untouched where it was, and a copy of it is kept
+under \verb{_originaux/} beside the queue: what enters the queue has been cropped
+and turned, and those pixels are gone.
+
+NOTHING is written to the workbook here. A row of \code{new_sheet} is the record
+of a MEASUREMENT, and a photograph nobody has digitized has no measurement to
+declare; the row is created by "Save & next", keyed on \code{photo_file}, exactly
+as for a photograph dropped in the folder by hand. An empty row written at
+intake would be indistinguishable from a specimen whose landmarks all came
+out \code{NA}.
+
+The queue is rebuilt on the spot -- the alternative being to close the
+application and lose the journal position for the sake of one photograph.
+}
+
+\section{Order of the queues}{
+
+The \code{"reconstruct"} and \code{"correct"} queues run in ALPHABETICAL order of the
+species, not in the order of the workbook rows -- which is an accident of how
+the sheet was assembled. The order of the queue is the order of the work:
+"Save & next" hands over the next NAME, so a session walks the
+classification instead of jumping from one unrelated fish to another.
+Congeners then arrive together -- the same eye, the same fin, the same
+ambiguities -- and correcting one \emph{Barbus} puts the whole genus in the
+operator's hand while the criteria are still fresh. Sorting is done in the C
+locale, so the order is identical on every workstation. The \code{"new"} queue
+keeps the alphabetical order of the photograph FILE names, the only identity
+those images have before they are named.
+
+The field to the right of the toolbar reaches any species of the current
+queue by name; its list is the queue itself, hence alphabetical, and the
+search results keep that order instead of being ranked by match score.
 }
 
 \examples{

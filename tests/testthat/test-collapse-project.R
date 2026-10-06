@@ -99,6 +99,28 @@ test_that("the rule is read back off the geometry of a saved specimen", {
   expect_length(.fm_collapse_detect(Q), 0L)
 })
 
+test_that("a COPY rule is read back off the coincident points", {
+  # what a reopened specimen must show: the four historical rules leave a pair
+  # of points at the same place, and that pair IS the statement.
+  P <- fm_bent_fish()
+  expect_length(.fm_collapse_detect(P), 0L)
+  expect_identical(.fm_collapse_detect(.fm_apply_collapse(P, "Mo")), "Mo")
+  expect_identical(.fm_collapse_detect(.fm_apply_collapse(P, "Hd6")), "Hd6")
+  expect_identical(.fm_collapse_detect(.fm_apply_collapse(P, "PFi")), "PFi")
+  expect_identical(.fm_collapse_detect(.fm_apply_collapse(P, "EyeTop")), "EyeTop")
+  # two declarations at once come back as two
+  expect_setequal(.fm_collapse_detect(.fm_apply_collapse(P, c("Mo", "Hd6"))),
+                  c("Mo", "Hd6"))
+  # a pair one half of which is not measurable states nothing
+  Q <- .fm_apply_collapse(P, "PFi"); Q[10, ] <- NA_real_
+  expect_length(.fm_collapse_detect(Q), 0L)
+})
+
+test_that("the two kinds of rule are detected side by side", {
+  P <- .fm_apply_collapse(fm_bent_fish(), c("Bd4", "Mo"))
+  expect_setequal(.fm_collapse_detect(P), c("Mo", "Bd4"))
+})
+
 test_that("only the COPIED points are taken over by their rule", {
   # a projected point keeps the abscissa that was clicked, so its override must
   # survive; a copied point owes its partner everything

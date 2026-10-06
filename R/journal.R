@@ -57,6 +57,14 @@
   "img_w", "img_h",# image size in pixels: the X/Y are in IMAGE pixels
   "ruler_mm",      # real length of the scale bar 20-21 (mm), or NA
   "mm_per_px",     # resulting scale, or NA
+  "quality_score", # operator's rating of the digitizing, 1 (poor) to 5 (excellent),
+                   # empty if the specimen was not rated
+  "reviewed",      # TRUE if the operator ticked "checked" for this specimen
+  "collapse",      # coincidences DECLARED on the specimen (segments measuring
+                   # zero), as rule identifiers joined by ";" -- "Mo;Hd6".
+                   # Empty = none declared. A copy rule leaves nothing in the
+                   # coordinates to tell it apart from a chance coincidence, so
+                   # the statement has to be written down as such
   "landmark",      # point number
   "x", "y",        # coordinates in image pixels (Y downwards)
   "status"         # placed | seeded | adjusted | derived | na  (see below)
@@ -192,13 +200,22 @@ fm_journal_open <- function(journal_dir, operator = NULL, app_version = NA_chara
 #' @param points Landmark numbers to record.
 #' @param status Named vector (name = point number) of statuses; default "placed".
 #' @param species,photo_file,mode,target_sheet,img_w,img_h,ruler_mm,mm_per_px Metadata.
+#' @param quality_score Operator's rating of the entry, 1 (poor) to 5
+#'   (excellent), or NA if the specimen was not rated.
+#' @param reviewed TRUE if the operator declared the specimen checked, FALSE if
+#'   not, NA if unknown. Repeated on every point line of the record.
+#' @param collapse Coincidences declared on the specimen (segments measuring
+#'   zero), as a character vector of rule identifiers or a single ";"-joined
+#'   string. NA or empty: none declared.
 #' @return The `record_id` written (invisibly), or NULL if there was nothing to write.
 #' @export
 fm_journal_append <- function(jr, row_key, coords, points,
                               status = NULL, species = NA, photo_file = NA,
                               mode = NA, target_sheet = NA,
                               img_w = NA, img_h = NA,
-                              ruler_mm = NA, mm_per_px = NA) {
+                              ruler_mm = NA, mm_per_px = NA,
+                              quality_score = NA, reviewed = NA,
+                              collapse = NA) {
   if (!inherits(jr, "fm_journal")) stop("`jr` is not a journal.", call. = FALSE)
   points <- points[points >= 1 & points <= nrow(coords)]
   if (!length(points)) return(invisible(NULL))
@@ -237,6 +254,17 @@ fm_journal_append <- function(jr, row_key, coords, points,
     species = .fm_tsv_safe(species), photo_file = .fm_tsv_safe(photo_file),
     img_w = num(img_w), img_h = num(img_h),
     ruler_mm = num(ruler_mm), mm_per_px = num(mm_per_px),
+    # Record-level appreciation of the entry, repeated on every point line: the
+    # journal has one row per landmark and no header per record, so a
+    # record-level field has nowhere else to live. `reviewed` is written
+    # "TRUE"/"FALSE" and never "" when it is known, because an empty cell must
+    # keep meaning "the version that wrote this record had no such field".
+    quality_score = num(quality_score),
+    reviewed = if (length(reviewed) == 1 && !is.na(reviewed))
+                 as.character(isTRUE(as.logical(reviewed))) else "",
+    # several rule identifiers arrive as a vector, one cell as a ";" string:
+    # both are collapsed here, so the caller may pass whichever it has
+    collapse = .fm_tsv_safe(paste(stats::na.omit(collapse), collapse = ";")),
     landmark = as.character(points),
     x = num(round(coords[points, 1], 3)), y = num(round(coords[points, 2], 3)),
     status = st, stringsAsFactors = FALSE)
@@ -419,7 +447,8 @@ fishmorph_consolidate <- function(journal_dir, long = FALSE, drop_na_points = TR
 
   meta_cols <- c("row_key", "species", "photo_file", "operator", "timestamp",
                  "record_id", "mode", "target_sheet", "img_w", "img_h",
-                 "ruler_mm", "mm_per_px", "app_version")
+                 "ruler_mm", "mm_per_px", "quality_score", "reviewed",
+                 "collapse", "app_version")
   wide <- K[!duplicated(K$record_id), meta_cols, drop = FALSE]
   wide <- wide[order(wide$row_key), , drop = FALSE]
   rownames(wide) <- NULL

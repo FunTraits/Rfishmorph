@@ -71,13 +71,22 @@
 
 # click entry order: the broken axis first, snout -> 22 -> 24 -> caudal, then
 # the points to place by hand (auto-advance); .FM_DERIVED = derived points.
-.FM_CLICK_ORDER <- c(1L, 22L, 24L, 2L, 3L, 4L, 7L, 5L, 6L, 13L, 14L, 10L, 12L, 16L, 17L, 18L, 19L)
-# derived (automatic): 8/9/11 = belly points; 15 is seeded. 10/12 stay in the
+.FM_CLICK_ORDER <- c(1L, 22L, 24L, 2L, 3L, 4L, 7L, 5L, 6L, 15L, 10L, 12L, 16L, 17L, 18L, 19L)
+# The anatomical run is the one intraitR::digitize_landmarks() uses (ANAT_ORDER
+# there), minus the points this app derives: the two applications measure the
+# same protocol, and an operator moving between them must not have to relearn
+# the path his eye takes over the specimen.
+#
+# derived (automatic): 8/9/11 = belly points; 13/14 are seeded symmetrically
+# about 7 from the Ed segment (.fm_place); 23 is computed. 10/12 stay in the
 # entry loop; as long as they have not been clicked they follow 11 (PFi/PFl
 # preserved), and once placed or corrected they stay where you put them.
+# 15 (jaw tip, Jl) is NOT derived: in "new" mode there is no measured Jl, so
+# leaving it on its median seed would report an inter-specific median as a
+# measurement. It is clicked, between 6 and 10, as in intraitR.
 # 22 = HINGE (no longer "derived"): shown between 1 and 2 and made active when
 # a species is opened in correction mode (see seed_from_existing).
-.FM_DERIVED     <- c(8L, 9L, 11L, 15L, 23L)
+.FM_DERIVED     <- c(8L, 9L, 11L, 13L, 14L, 23L)
 
 # MODE "new" (new photographs): same order + the scale bar 20/21 at the end.
 # 20/21 are OPTIONAL (they may be left unplaced) and serve only to compute
@@ -195,9 +204,191 @@
   idx
 }
 
+# --- writing a photograph back to disk ---------------------------------------
+# Used by the "bake the flip into the file" button. Three precautions, none of
+# them optional:
+#
+#   * The ORIGINAL is copied aside first, ONCE. A digitizing session is allowed
+#     to change how a photograph is stored, not to destroy the only copy of it;
+#     and the backup is written only if it does not already exist, so a second
+#     flip cannot overwrite the pristine file with an already-flipped one.
+#   * The write goes to a temporary file IN THE SAME DIRECTORY and is renamed
+#     over the target. A rename within one filesystem is atomic: an interrupted
+#     write leaves the old photograph intact rather than a truncated one.
+#     tempdir() would not do -- it is often another device, where rename falls
+#     back on a copy and the atomicity is lost.
+#   * The output format follows the REAL bytes of the original, not its
+#     extension. In this collection about 7 % of the ".jpg" files are in fact
+#     PNG, GIF or BMP (see read_img()), and re-encoding one of them as JPEG
+#     because of its name would add lossy compression to a lossless file.
+.fm_write_img <- function(a, path, quality = 0.97) {
+  sig <- tryCatch(readBin(path, "raw", n = 2L), error = function(e) raw(0))
+  is_jpeg <- length(sig) >= 2 && sig[1] == as.raw(0xFF) && sig[2] == as.raw(0xD8)
+  a[!is.finite(a)] <- 0
+  a[] <- pmin(pmax(a, 0), 1)
+  # JPEG has no alpha channel: an RGBA array would be refused outright.
+  if (is_jpeg && length(dim(a)) == 3L && dim(a)[3] == 4L)
+    a <- a[, , seq_len(3), drop = FALSE]
+
+  bak_dir <- file.path(dirname(path), "_originaux")
+  bak <- file.path(bak_dir, basename(path))
+  if (!file.exists(bak)) {
+    dir.create(bak_dir, showWarnings = FALSE, recursive = TRUE)
+    file.copy(path, bak, overwrite = FALSE)
+  }
+
+  tmp <- paste0(path, ".tmp")
+  on.exit(if (file.exists(tmp)) unlink(tmp), add = TRUE)
+  if (is_jpeg) {
+    if (!requireNamespace("jpeg", quietly = TRUE))
+      stop("Writing a JPEG needs the 'jpeg' package.", call. = FALSE)
+    jpeg::writeJPEG(a, tmp, quality = quality)
+  } else {
+    if (!requireNamespace("png", quietly = TRUE))
+      stop("Writing a PNG needs the 'png' package.", call. = FALSE)
+    png::writePNG(a, tmp)
+  }
+  if (!file.rename(tmp, path))
+    stop("Could not replace ", path, call. = FALSE)
+  list(path = path, backup = bak, jpeg = is_jpeg)
+}
+
 .fm_species_key <- function(genus_species) {
   x <- gsub("[^A-Za-z]+", "_", genus_species)          # "Genus.species" -> genus_species
   tolower(gsub("^_|_$", "", x))
+}
+
+# --- intake of a new photograph ----------------------------------------------
+# Crop, rotate and flip are applied to the raw ARRAY and baked into the file
+# BEFORE the photograph enters the queue. That order is not a convenience: the
+# digitizer records coordinates in the pixels OF THE FILE, so re-framing a
+# picture that already carries landmarks would silently invalidate every one of
+# them. The intake page is the only place where the geometry of the image may
+# still change, and it is upstream of the first click by construction.
+
+# rotation by a multiple of 90 degrees, counter-clockwise on screen. Written on
+# the array rather than delegated to magick: a quarter turn is a transposition
+# and a row reversal, exact and lossless, where a re-encode through an external
+# library would resample the picture for nothing.
+.fm_rot90 <- function(a, k = 1L) {
+  k <- as.integer(k) %% 4L
+  if (is.na(k) || !k) return(a)
+  rot1 <- function(x) {
+    d <- dim(x)
+    if (length(d) == 3L) {
+      out <- array(x[1], dim = c(d[2], d[1], d[3]))
+      for (ch in seq_len(d[3])) out[, , ch] <- t(x[, , ch])[d[2]:1, , drop = FALSE]
+      out
+    } else t(x)[d[2]:1, , drop = FALSE]
+  }
+  for (i in seq_len(k)) a <- rot1(a)
+  a
+}
+
+# mirror: "h" left/right, "v" top/bottom, "hv" both.
+.fm_mirror <- function(a, mode = "h") {
+  d <- dim(a); H <- d[1]; W <- d[2]
+  if (length(d) == 3L) {
+    if (grepl("h", mode)) a <- a[, W:1, , drop = FALSE]
+    if (grepl("v", mode)) a <- a[H:1, , , drop = FALSE]
+  } else {
+    if (grepl("h", mode)) a <- a[, W:1, drop = FALSE]
+    if (grepl("v", mode)) a <- a[H:1, , drop = FALSE]
+  }
+  a
+}
+
+# crop to a rectangle given in DISPLAY pixels (x to the right, y downwards from
+# the top-left corner), the frame the brush of the preview returns. The
+# rectangle is clamped to the picture and refused below 8 px a side: a stray
+# click must not turn a specimen into a two-pixel smear.
+.fm_crop <- function(a, x0, x1, y0, y1, min_px = 8L) {
+  d <- dim(a); H <- d[1]; W <- d[2]
+  cx <- sort(c(x0, x1)); cy <- sort(c(y0, y1))
+  c0 <- max(1L, floor(cx[1]) + 1L); c1 <- min(W, ceiling(cx[2]))
+  r0 <- max(1L, floor(cy[1]) + 1L); r1 <- min(H, ceiling(cy[2]))
+  if (!is.finite(c0) || !is.finite(c1) || !is.finite(r0) || !is.finite(r1) ||
+      c1 - c0 + 1L < min_px || r1 - r0 + 1L < min_px) return(NULL)
+  if (length(d) == 3L) a[r0:r1, c0:c1, , drop = FALSE] else a[r0:r1, c0:c1, drop = FALSE]
+}
+
+# TRUE when the file really is a PNG, whatever its extension says (about 7 % of
+# the ".jpg" of this collection are not JPEG -- see read_img()).
+.fm_is_png_file <- function(path) {
+  sig <- tryCatch(readBin(path, "raw", n = 8L), error = function(e) raw(0))
+  length(sig) >= 8L &&
+    all(sig[1:8] == as.raw(c(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)))
+}
+
+# writes an array to a NEW file, the format taken from the target extension and
+# the write made atomic by a rename inside the same directory (see
+# .fm_write_img for why tempdir() would not do). No backup here: the target
+# does not exist yet -- .fm_new_photo_path() guarantees it.
+.fm_write_img_as <- function(a, path, quality = 0.97) {
+  a[!is.finite(a)] <- 0
+  a[] <- pmin(pmax(a, 0), 1)
+  is_png <- grepl("\\.png$", path, ignore.case = TRUE)
+  if (!is_png && length(dim(a)) == 3L && dim(a)[3] == 4L)
+    a <- a[, , seq_len(3), drop = FALSE]           # JPEG carries no alpha channel
+  tmp <- paste0(path, ".tmp")
+  on.exit(if (file.exists(tmp)) unlink(tmp), add = TRUE)
+  if (is_png) {
+    if (!requireNamespace("png", quietly = TRUE))
+      stop("Writing a PNG needs the 'png' package.", call. = FALSE)
+    png::writePNG(a, tmp)
+  } else {
+    if (!requireNamespace("jpeg", quietly = TRUE))
+      stop("Writing a JPEG needs the 'jpeg' package.", call. = FALSE)
+    jpeg::writeJPEG(a, tmp, quality = quality)
+  }
+  if (!file.rename(tmp, path))
+    stop("Could not write ", path, call. = FALSE)
+  path
+}
+
+# file name of a new photograph: "Genus_species.<ext>", suffixed 2, 3... when
+# the folder already holds that species. The suffix is a SPECIMEN counter, not
+# a duplicate marker -- the "new" queue is one entry per PHOTOGRAPH, several
+# specimens of one species are legitimate, and both .fm_name_from_file() and
+# .fm_photo_index() strip a trailing number, so all of them read back to the
+# same binomial. The name is the only identity a raw image has, which is why it
+# is normalised here rather than left to whatever the camera produced.
+.fm_new_photo_path <- function(dir, genus_species, ext = "jpg") {
+  base <- gsub("[^A-Za-z]+", "_", trimws(genus_species))
+  base <- gsub("^_+|_+$", "", base)
+  if (!nzchar(base)) return(NA_character_)
+  ext <- sub("^\\.", "", tolower(ext))
+  cand <- file.path(dir, paste0(base, ".", ext))
+  k <- 1L
+  while (file.exists(cand) && k < 999L) {
+    k <- k + 1L
+    cand <- file.path(dir, paste0(base, "_", k, ".", ext))
+  }
+  cand
+}
+
+# a binomial, checked on its FORM alone: two words, genus capitalised, epithet
+# in lower case. Returns the normalised name, or NA with the reason attached.
+# FishBase is a separate, optional and non-blocking step: a name absent from
+# FishBase may still be a specimen worth digitizing, whereas "abramis  Brama"
+# is a typing accident in every case.
+.fm_check_binomial <- function(x) {
+  x <- trimws(gsub("[_.]+", " ", as.character(x %||% "")))
+  x <- gsub("\\s+", " ", x)
+  w <- strsplit(x, " ")[[1]]
+  w <- w[nzchar(w)]
+  if (length(w) < 2L)
+    return(list(ok = FALSE, name = x,
+                msg = "Two words are needed: Genus species."))
+  if (length(w) > 3L)
+    return(list(ok = FALSE, name = x,
+                msg = "Too many words for a binomial (three at most, sp. included)."))
+  if (grepl("[^A-Za-z]", paste(w, collapse = "")))
+    return(list(ok = FALSE, name = x,
+                msg = "Letters only (no digit, no accent, no hyphen)."))
+  w[1] <- paste0(toupper(substr(w[1], 1, 1)), tolower(substring(w[1], 2)))
+  w[-1] <- tolower(w[-1])
+  list(ok = TRUE, name = paste(w, collapse = " "), msg = "")
 }
 
 # --- point 23 (derived) ------------------------------------------------------
@@ -570,16 +761,33 @@
 .fm_collapse_skip_extreme <- function(active) {
   if ("Bd4" %in% active) 4L else integer(0)
 }
-# Read the projection rules back off the coordinates: a specimen reopened must
-# show the statement it was saved with, and a projection leaves no pair of
-# coincident points to recognize it by.
+# Read the rules back off the COORDINATES: a specimen reopened must show the
+# statement it was saved with. Two readings, one per kind of rule --
+#   * projection : the point sits on the mid axis, so the distance to that axis
+#                  is what identifies it;
+#   * copy       : the two points of the pair are at the same place.
+# The declaration is also recorded explicitly in the workbook and the journal
+# (column `collapse_rules`), and that record is the one that counts for anything
+# saved by this version; this function is what makes the thousands of specimens
+# entered BEFORE it -- and any table coming from elsewhere -- still speak. The
+# two are unioned on reload.
+#
+# Only the FIRST pair of a copy rule is tested: it is the statement itself
+# ("9 on 1" = the mouth opens on the ventral profile), the others being its
+# consequences (23 follows 1, and so on). A consequence left NA by an older
+# entry would otherwise hide the statement that produced it.
 .fm_collapse_detect <- function(P, tol = .FM_PROJ_TOL) {
   if (is.null(P)) return(character(0))
   nm <- names(.FM_COLLAPSE)
   nm[vapply(.FM_COLLAPSE, function(r) {
-    if (is.null(r$project)) return(FALSE)
-    d <- vapply(r$project, function(pt) .fm_dist_mid(P, pt), numeric(1))
-    all(is.finite(d)) && all(d <= tol)
+    if (!is.null(r$project)) {
+      d <- vapply(r$project, function(pt) .fm_dist_mid(P, pt), numeric(1))
+      return(all(is.finite(d)) && all(d <= tol))
+    }
+    if (!length(r$moves)) return(FALSE)
+    m <- r$moves[[1]]
+    if (max(m) > nrow(P) || !all(is.finite(P[m, ]))) return(FALSE)
+    sqrt(sum((P[m[1], ] - P[m[2], ])^2)) <= tol
   }, logical(1))]
 }
 
@@ -913,6 +1121,19 @@
 #' moved by a rule take the `"adjusted"` status in the journal, and the
 #' declarations are reset for every species.
 #'
+#' A declaration is SAVED with the specimen, in the column `collapse_rules` of
+#' the target sheet and in the journal, as the list of rule identifiers
+#' (`"Mo;Hd6"`). Reopening the specimen puts the boxes back. It has to be
+#' written down as such: a copy rule leaves nothing in the coordinates that
+#' distinguishes it from a chance coincidence, and an unticked box cannot be
+#' told from a box that was never ticked. Before this column existed the
+#' statement lived only in the geometry it produced, so a reopened specimen came
+#' back with its points collapsed but its boxes empty -- and the first click,
+#' with the rule no longer applied, quietly undid the zero. For everything
+#' entered then, and for any table coming from elsewhere, the rules are still
+#' read back off the coordinates -- a pair of coincident points, a point on the
+#' mid axis -- and the two readings are unioned.
+#'
 #' The same box also checks the ORDER of the eye vertical. The six points 5, 13,
 #' 7, 14, 6, 8 are placed on one vertical by the FISHMORPH conventions, and
 #' anatomy fixes their order along it, from the back downwards: top of the head,
@@ -926,6 +1147,94 @@
 #' An inversion is reported but **never corrected automatically**: moving a
 #' point to satisfy the order would invent a measurement rather than repair one.
 #'
+#' @section Quality and review of an entry:
+#' The `"Quality"` tab of the side panel carries two fields the coordinates
+#' cannot express: a SCORE from 1 (unusable, landmarks largely guessed) to 5
+#' (excellent -- whole fish, strictly lateral, every landmark unambiguous), and
+#' a TICK declaring the specimen checked. They answer two different questions,
+#' hence two fields: how good the entry is, and whether anyone has actually
+#' looked at it. A specimen can perfectly well be checked AND poor -- that is
+#' the state a re-photographing list is built from.
+#'
+#' `"Not scored"` and an empty cell are the same statement, and neither is a
+#' score of zero. Both fields are reloaded with the specimen and rewritten at
+#' every save, so returning to a species and saving it again preserves the
+#' review it already carries; the author and the date are stamped only when
+#' something is actually declared, otherwise "nobody has looked at it" would be
+#' indistinguishable from "somebody looked and said nothing".
+#'
+#' They are written to four columns of the target sheet -- `quality_score`,
+#' `reviewed`, `reviewed_by`, `review_date`, created on the fly like the hinge
+#' columns, next to the `collapse_rules` of the declared coincidences -- and, at
+#' record level, to the journal, from which
+#' [fishmorph_consolidate()] brings them back. The journal already said how each
+#' POINT was obtained (`placed`, `seeded`, `derived`...); this says what the
+#' ENTRY as a whole is worth, which only the operator looking at the photograph
+#' can decide.
+#'
+#' @section Bringing a new photograph in ("New species" page):
+#' Until now a photograph entered a session only by being dropped into
+#' `new_photo_dir` from a file manager, before launch, under whatever name the
+#' camera had given it. That is not a detail of housekeeping: the file name is
+#' the ONLY identity an image has before it is measured -- the species is read
+#' off it (`.fm_name_from_file()`) and the workbook rows are matched on it -- so
+#' the step belongs to the protocol and it belongs in the application.
+#'
+#' The second tab of the main panel does it in four moves, in the only order
+#' that is safe. **Browse** for the file (JPEG, PNG, GIF, BMP or TIFF; the real
+#' format is read from the magic bytes, not from the extension, since about
+#' 7 per cent of the `.jpg` of this collection are not JPEG). **Name** the
+#' specimen `Genus species`, pre-filled from the file name and checkable against
+#' FishBase. **Frame** it -- quarter turns, mirrors, and a crop drawn with the
+#' mouse on the preview. **Commit**, which writes the picture and opens it
+#' straight away in the `"new"` queue.
+#'
+#' The framing comes before the first click and must never come after it. The
+#' digitizer records coordinates in the pixels OF THE FILE, so cropping or
+#' rotating a photograph that already carries landmarks would move every one of
+#' them without touching a single recorded number. This page is the one place
+#' where the geometry of an image may still change, and it is upstream of the
+#' first click by construction. Quarter turns and crops are exact array
+#' operations, lossless by nature; the output format follows the real bytes of
+#' the source, so a PNG stays a PNG rather than acquiring JPEG artefacts on the
+#' very pixels the landmarks are read on.
+#'
+#' The copy is named `Genus_species.<ext>`, suffixed `_2`, `_3`... when the
+#' folder already holds that species -- a SPECIMEN counter, not a duplicate
+#' marker: the `"new"` queue is one entry per PHOTOGRAPH, several specimens of
+#' one species are legitimate, and both readers of the file name strip a
+#' trailing number, so all of them come back to the same binomial. The file the
+#' operator selected is left untouched where it was, and a copy of it is kept
+#' under `_originaux/` beside the queue: what enters the queue has been cropped
+#' and turned, and those pixels are gone.
+#'
+#' NOTHING is written to the workbook here. A row of `new_sheet` is the record
+#' of a MEASUREMENT, and a photograph nobody has digitized has no measurement to
+#' declare; the row is created by "Save & next", keyed on `photo_file`, exactly
+#' as for a photograph dropped in the folder by hand. An empty row written at
+#' intake would be indistinguishable from a specimen whose landmarks all came
+#' out `NA`.
+#'
+#' The queue is rebuilt on the spot -- the alternative being to close the
+#' application and lose the journal position for the sake of one photograph.
+#'
+#' @section Order of the queues:
+#' The `"reconstruct"` and `"correct"` queues run in ALPHABETICAL order of the
+#' species, not in the order of the workbook rows -- which is an accident of how
+#' the sheet was assembled. The order of the queue is the order of the work:
+#' "Save & next" hands over the next NAME, so a session walks the
+#' classification instead of jumping from one unrelated fish to another.
+#' Congeners then arrive together -- the same eye, the same fin, the same
+#' ambiguities -- and correcting one *Barbus* puts the whole genus in the
+#' operator's hand while the criteria are still fresh. Sorting is done in the C
+#' locale, so the order is identical on every workstation. The `"new"` queue
+#' keeps the alphabetical order of the photograph FILE names, the only identity
+#' those images have before they are named.
+#'
+#' The field to the right of the toolbar reaches any species of the current
+#' queue by name; its list is the queue itself, hence alphabetical, and the
+#' search results keep that order instead of being ranked by match score.
+#'
 #' @param xlsx_path Path of the master workbook (2 sheets).
 #' @param photo_dir Photograph folder (stays local).
 #' @param out_path  Path of the output copy. NULL -> "<master>_reconstructed.xlsx"
@@ -933,10 +1242,18 @@
 #'   on it (species already recorded are excluded from the queue).
 #' @param seg_sheet,lm_sheet Sheet names.
 #' @param new_sheet Sheet the NEW specimens are appended to ("new" mode).
-#'   Created (with the headers of `lm_sheet`) if it does not exist.
+#'   Created (with the headers of `lm_sheet`) if it does not exist. Its rows
+#'   ALSO feed the "correct" queue, so a species entered here -- through the
+#'   "new" queue or through the "Absent from FISHMORPH" panel of FishInTrait --
+#'   can be reopened and corrected instead of staying invisible until someone
+#'   promotes it to `lm_sheet`. Corrections go back to the sheet the row came
+#'   from. NAME IT AS THE WORKBOOK DOES: the match is exact, and a workbook
+#'   carrying `New_specimen` opened with the default `"new_specimens"` gets a
+#'   SECOND, empty sheet rather than the one it already has.
 #' @param new_photo_dir Folder of the new specimens' photographs ("new" mode).
 #'   Every image in the folder forms the queue. It may not exist: the "new"
-#'   mode is then simply unavailable.
+#'   mode is then simply unavailable until the "New species" page puts a
+#'   photograph in it, which creates the folder.
 #' @param ruler_mm Real length (mm) of the scale bar digitized by points 20 and
 #'   21 in "new" mode. Can be changed in the app, specimen by specimen.
 #' @param journal_dir Folder of the append-only JOURNAL (see [fm_journal_open()]).
@@ -952,8 +1269,9 @@
 #'   the session), are written at the end of the session, by the dedicated
 #'   button, and are in the journal in any case. 1 = the historical behaviour
 #' @param mode Starting queue: "reconstruct" (species WITHOUT landmarks, to be
-#'   digitized from the segments), "correct" (species ALREADY landmarked, to be
-#'   reviewed/corrected: the 21 points are reloaded from the workbook) or
+#'   digitized from the segments), "correct" (specimens ALREADY landmarked, on
+#'   `lm_sheet` OR on `new_sheet`, to be reviewed/corrected: the 21 points are
+#'   reloaded from the workbook) or
 #'   "new" (new photographs from `new_photo_dir`, appended to `new_sheet`).
 #'   Switchable at any moment through the "Queue" selector in the app. If the
 #'   requested queue is empty, the app starts on another one.
@@ -1055,9 +1373,27 @@ launch_fishmorph_digitizer <- function(
   # columns of the extra hinges 24/25: created if absent, so that these points
   # are RECORDED like the others (22/23 already have their columns).
   hinge_cols <- c("24_X", "24_Y", "25_X", "25_Y")
-  new_lm_hdr <- ensure_cols(lm_sheet, lm_hdr, hinge_cols)
-  # rep(...) and not a bare NA: on an empty sheet (0 rows) df[[cc]] <- NA fails
-  for (cc in setdiff(new_lm_hdr, lm_hdr)) lm_df[[cc]] <- rep(NA_real_, nrow(lm_df))
+  # --- what an entry says about itself ---------------------------------------
+  # An entry is not only a set of coordinates: it is also worth something, and
+  # that judgement belongs BESIDE the coordinates it qualifies. Four columns,
+  # created on the fly like the hinges: the score (1-5), the checked flag, and
+  # WHO declared it WHEN -- a review with no author and no date is an opinion
+  # that cannot be audited.
+  # `collapse_rules` joins them: the coincidences DECLARED on the specimen, as
+  # the list of rule identifiers ("Mo;Hd6"). Until now the declaration only
+  # existed in the geometry it produced, and the copy rules left nothing a
+  # reader could tell from an ordinary coincidence -- reopening a specimen
+  # brought its points back but not the statement that had put them there, so
+  # the boxes came back empty and the next click undid the zero in silence.
+  entry_cols <- c("quality_score", "reviewed", "reviewed_by", "review_date",
+                 "collapse_rules")
+  new_lm_hdr <- ensure_cols(lm_sheet, lm_hdr, c(hinge_cols, entry_cols))
+  # rep(...) and not a bare NA: on an empty sheet (0 rows) df[[cc]] <- NA fails.
+  # The review columns are created as CHARACTER: an author and a date are text,
+  # and a logical column would refuse the string written back into it.
+  for (cc in setdiff(new_lm_hdr, lm_hdr))
+    lm_df[[cc]] <- if (cc %in% entry_cols) rep(NA_character_, nrow(lm_df))
+                   else rep(NA_real_, nrow(lm_df))
   lm_hdr <- new_lm_hdr                             # updated header -> col_of finds them
   # points recorded / reloaded: the landmarks + the hinges 22/23/24/25
   save_pts <- c(.FM_LM_PTS, 24L, 25L)
@@ -1085,9 +1421,14 @@ launch_fishmorph_digitizer <- function(
   new_hdr <- ns$hdr
   new_df  <- ns$df
   save_pts_new <- c(.FM_LM_PTS, .FM_SCALE_PTS, 24L, 25L)
+  # `IUCN` is created here although the digitizer never writes it: a species
+  # absent from the segment table has no threat status anywhere, and the sheet
+  # it lives on is the only place one can be recorded. The column exists so
+  # that the FishInTrait panel has somewhere to put what the operator types,
+  # and so that build_fishmorph_landmark_table() finds it there.
   need_new <- c("Genus.species",
                 as.vector(rbind(paste0(save_pts_new, "_X"), paste0(save_pts_new, "_Y"))),
-                "photo_file", "ruler_mm", "mm_per_px")
+                "photo_file", "ruler_mm", "mm_per_px", "IUCN", entry_cols)
   new_hdr2 <- ensure_cols(new_sheet, new_hdr, need_new)
   for (cc in setdiff(new_hdr2, new_hdr)) new_df[[cc]] <- rep(NA, nrow(new_df))
   new_hdr <- new_hdr2
@@ -1102,12 +1443,105 @@ launch_fishmorph_digitizer <- function(
   seg_df$.key <- .fm_species_key(seg_df$Genus.species)
   lm_df$.key  <- .fm_species_key(lm_df$Genus.species)
 
+  # --- where a row of `lm_df` actually LIVES ---------------------------------
+  # `lm_df` used to be a view of ONE sheet, so a queue position was a row number
+  # and the destination of a save was implicit. It now holds rows coming from
+  # two sheets, and the destination has to travel WITH the row: `.sheet` names
+  # the sheet, `.srow` the row inside it. Nothing else in the application needs
+  # to know -- the display, the reloading of the points and the photograph
+  # index all work on `lm_df` and are unchanged.
+  lm_df$.sheet <- rep(lm_sheet, nrow(lm_df))
+  lm_df$.srow  <- seq_len(nrow(lm_df))
+  # `photo_file` is a column of the new-specimen sheet only; carried here under
+  # a dot name so that it travels with the row without being mistaken for a
+  # column of `lm_sheet` that the save path would try to write back.
+  lm_df$.photo_file <- rep(NA_character_, nrow(lm_df))
+
+  # --- the new specimens join the "correct" queue ----------------------------
+  # A species entered by the "Absent from FISHMORPH" panel of FishInTrait, or
+  # digitized through the "new" queue, lands on `new_sheet` and NOT on
+  # `lm_sheet`. It was then invisible in every queue: `reconstruct` and
+  # `correct` are built on the rows of `lm_sheet`, and `new` lists the FILES of
+  # `new_photo_dir`, where its photograph is not -- FishInTrait files it with
+  # the others, under `photo_dir`. A specimen already carrying its twenty-one
+  # points does not need the intake queue; it needs to be re-openable and
+  # correctable like any other, which is exactly what `correct` is for.
+  #
+  # A species already held by `lm_sheet` is NOT taken from `new_sheet`: the
+  # staging row has been promoted, and the published row is the one to correct.
+  #
+  # The queue is built ONCE, at start-up, like the other two: a photograph
+  # brought in through the "New species" page during the session appears in the
+  # "new" queue, not in "correct", and only the next launch moves it over. That
+  # is deliberate -- rebuilding the queue under the operator would renumber the
+  # positions they are navigating with.
+  if (nrow(new_df)) {
+    anchor_new <- suppressWarnings(as.numeric(new_df[["1_X"]]))
+    cand <- which(!is.na(anchor_new))
+    if (length(cand)) {
+      # the type of each column is taken from `lm_df`: `new_df` is entirely
+      # character (see above), and rbind()ing it as it stands would silently
+      # turn the coordinate columns of the whole table into text.
+      like <- function(target, v)
+        if (is.numeric(target)) suppressWarnings(as.numeric(v))
+        else if (is.logical(target)) as.logical(v)
+        else as.character(v)
+      add <- as.data.frame(
+        lapply(lm_df, function(cc) rep(cc[NA_integer_], length(cand))),
+        stringsAsFactors = FALSE)
+      names(add) <- names(lm_df)
+      for (nm in intersect(names(lm_df), names(new_df)))
+        add[[nm]] <- like(lm_df[[nm]], new_df[[nm]][cand])
+      add$.sheet <- rep(new_sheet, length(cand))
+      add$.srow  <- cand
+      add$.key   <- .fm_species_key(add$Genus.species)
+      add$.photo_file <- if ("photo_file" %in% names(new_df))
+        trimws(as.character(new_df$photo_file[cand])) else NA_character_
+      seen <- (add$.key %in% lm_df$.key) | is.na(add$.key)
+      if (any(seen))
+        message(sprintf(paste("%d row(s) of '%s' already held by '%s'",
+                              "(or unnamed): left out of the queue."),
+                        sum(seen), new_sheet, lm_sheet))
+      add <- add[!seen, , drop = FALSE]
+      if (nrow(add)) {
+        lm_df <- rbind(lm_df, add)
+        message(sprintf("%d new specimen(s) from '%s' added to the 'correct' queue.",
+                        nrow(add), new_sheet))
+      }
+    }
+  }
+
   seg_cols <- c("Bl", "Bd", "Hd", "Eh2", "Mo2", "PFi2", "PFl", "Ed", "Jl", "CPd", "CFd")
   has_seg  <- stats::complete.cases(seg_df[, "Bl", drop = FALSE]) &
               !is.na(suppressWarnings(as.numeric(seg_df$Bl)))
   xcols <- paste0(.FM_LM_PTS, "_X")
   lm_missing <- apply(lm_df[, xcols, drop = FALSE], 1, function(r) all(is.na(r)))
-  has_photo  <- lm_df$.key %in% names(photos)
+
+  # --- the photograph of a row, resolved ONCE --------------------------------
+  # The species key is the right link for `lm_sheet`, where one row is one
+  # species. It is the WRONG one for `new_sheet`, where one row is one
+  # PHOTOGRAPH: the plate mode puts several specimens of the same species on
+  # their own rows, and keying on the species would show all of them the same
+  # picture. `photo_file`, which the digitizer records precisely for that, is
+  # therefore preferred whenever it is filled and the file can be found -- in
+  # `photo_dir` or in `new_photo_dir`, the specimen having passed through both.
+  # The species index remains the fallback: a row written by the FishInTrait
+  # panel carries no `photo_file`, only a name.
+  photo_of_file <- function(f) {
+    if (is.na(f) || !nzchar(f)) return(NA_character_)
+    for (d in c(photo_dir, new_photo_dir)) {
+      p <- file.path(d, f)
+      if (file.exists(p)) return(p)
+    }
+    NA_character_
+  }
+  lm_photo <- unname(photos[lm_df$.key])          # NA for an unknown key
+  for (i in which(!is.na(lm_df$.photo_file))) {
+    p <- photo_of_file(lm_df$.photo_file[i])
+    if (!is.na(p)) lm_photo[i] <- p
+  }
+  lm_df$.photo <- lm_photo
+  has_photo  <- !is.na(lm_df$.photo)
 
   seg_by_key <- seg_df[has_seg, ]
   seg_by_key <- seg_by_key[!duplicated(seg_by_key$.key), ]
@@ -1116,12 +1550,28 @@ launch_fishmorph_digitizer <- function(
   # TWO queues, chosen at launch (the `mode` argument) and switchable with the
   # "Queue" selector in the app:
   #   * reconstruct : species WITHOUT landmarks, WITH segments and a photograph
-  #   * correct     : species ALREADY landmarked, WITH a photograph (to review /
-  #                   correct; the 21 points are reloaded from the workbook, NOT
-  #                   reconstructed from the segments)
+  #   * correct     : specimens ALREADY landmarked, WITH a photograph (to review
+  #                   / correct; the 21 points are reloaded from the workbook,
+  #                   NOT reconstructed from the segments). Rows of `lm_sheet`
+  #                   AND of `new_sheet`: a species added since the publication
+  #                   is corrected like any other, and each goes back to the
+  #                   sheet it came from (`.sheet` / `.srow`).
   q_recon <- which(lm_missing &
                      lm_df$.key %in% rownames(seg_by_key) & has_photo)
   q_corr  <- which(!lm_missing & has_photo & !is.na(lm_df$.key))
+  # Both queues run in ALPHABETICAL order of the species and not in the order of
+  # the workbook rows, which is an accident of how the sheet was assembled. The
+  # order of the queue IS the order of the work: "Save & next" hands over the
+  # next name, so a session walks the classification instead of jumping from one
+  # unrelated fish to another. Congeners then arrive together -- the same eye,
+  # the same fin, the same ambiguities -- and correcting one Barbus puts the
+  # whole genus in the operator's hand while the criteria are still fresh.
+  # method = "radix": collation in the C locale, hence the SAME order on every
+  # workstation, where the locale order would depend on the machine.
+  alpha_order <- function(rows) rows[order(lm_df$Genus.species[rows],
+                                           method = "radix")]
+  q_recon <- alpha_order(q_recon)
+  q_corr  <- alpha_order(q_corr)
 
   # the "new" queue: every image in the new-photographs folder. One entry = ONE
   # photograph (and not one species): several specimens of the same species are
@@ -1132,15 +1582,24 @@ launch_fishmorph_digitizer <- function(
   else character(0)
   q_new <- seq_along(new_photos)
 
+  # Three empty queues is no longer a fatal condition. It used to be, because
+  # nothing could then be done in the application; the "New species" page is
+  # precisely the answer to "there is nothing to digitize yet" -- browse a
+  # photograph, name it, and the "new" queue exists. Refusing to open would
+  # send the operator back to the file manager for the one case the page was
+  # written for.
   if (!length(q_recon) && !length(q_corr) && !length(q_new))
-    stop("No usable species (none to reconstruct, none to correct with a photograph, ",
-         "no new photograph in '", new_photo_dir, "').", call. = FALSE)
+    message("No usable species yet (nothing to reconstruct, nothing to correct ",
+            "with a photograph, no photograph in '", new_photo_dir, "'). ",
+            "Use the \"New species\" page to bring one in.")
   # if the requested queue is empty, we fall back to the first non-empty one
   qlen_of <- function(m) switch(m, reconstruct = length(q_recon),
                                 correct = length(q_corr), new = length(q_new), 0L)
   if (!qlen_of(mode)) {
     alt <- c("reconstruct", "correct", "new")
     alt <- alt[vapply(alt, function(m) qlen_of(m) > 0, logical(1))][1]
+    # every queue empty: we start on "new", the only one the intake page fills.
+    if (is.na(alt)) alt <- "new"
     message("File '", mode, "' vide -> demarrage en mode '", alt, "'."); mode <- alt
   }
   message(sprintf("Queues: %d species to reconstruct, %d to correct, %d new photograph(s).",
@@ -1166,7 +1625,11 @@ launch_fishmorph_digitizer <- function(
     invisible(ok)
   }
 
-  # choices for the direct-access field (value = position in the current queue)
+  # choices for the direct-access field (value = position in the current queue).
+  # No sorting here: the queues are ALREADY in alphabetical order (see
+  # alpha_order above), so the list of the field and the order in which
+  # "Save & next" hands the species over are one and the same thing -- a second
+  # sort would only let them drift apart.
   goto_of <- function(rows) stats::setNames(seq_along(rows), lm_df$Genus.species[rows])
   choices_recon <- goto_of(q_recon); choices_corr <- goto_of(q_corr)
   choices_new   <- stats::setNames(seq_along(new_photos), basename(new_photos))
@@ -1361,6 +1824,40 @@ launch_fishmorph_digitizer <- function(
                       "perpendicular to the axis, eye group on one vertical,",
                       "belly line aligned. Unticked, each point moves alone.")),
 
+    # --- quality and review, once per specimen --------------------------------
+    # The journal already says how each POINT was obtained (placed, seeded,
+    # derived...); nothing said how good the ENTRY was, and that judgement --
+    # a blurred photograph, a folded fin, a fish seen from three-quarters --
+    # only the operator looking at the picture can make. Two fields, because
+    # they answer two different questions: how good is it (1-5), and has anyone
+    # actually looked at it (the tick). A specimen can be checked AND poor.
+    shiny::tabPanel(
+      "Quality",
+      shiny::radioButtons(
+        "quality", "Quality score of the entry",
+        choices = c("Not scored" = "0", "1" = "1", "2" = "2", "3" = "3",
+                    "4" = "4", "5" = "5"),
+        selected = "0", inline = TRUE),
+      shiny::helpText("1 = unusable (specimen unreadable, landmarks largely",
+                      "guessed), 2 = doubtful, 3 = acceptable, 4 = good,",
+                      "5 = excellent (whole fish, strictly lateral, every",
+                      "landmark unambiguous). \"Not scored\" leaves the cell",
+                      "empty: an absent score and a bad score are not the same",
+                      "statement."),
+      shiny::checkboxInput("reviewed", "Species checked (reviewed)", FALSE),
+      shiny::helpText("Tick it once the landmarks have been looked at one by",
+                      "one on this photograph. Saved with the operator's name",
+                      "and the date, so a second pass knows what has already",
+                      "been examined and by whom."),
+      shiny::hr(),
+      shiny::uiOutput("review_info"),
+      shiny::helpText("Both fields are RELOADED with the specimen and rewritten",
+                      "at every save: coming back to a species and saving it",
+                      "again does not erase the review it already carries. They",
+                      "go to the workbook (columns quality_score, reviewed,",
+                      "reviewed_by, review_date) and to the journal, like the",
+                      "coordinates.")),
+
     shiny::tabPanel(
       "Display",
       shiny::checkboxInput("showlines", "Reference lines (outline/eye/belly)", TRUE),
@@ -1374,7 +1871,17 @@ launch_fishmorph_digitizer <- function(
       shiny::helpText("The second option flips ONLY the display of the",
                       "photograph: the landmarks (and the record) do not move.",
                       "Useful when the loaded points are mirrored relative to the",
-                      "photograph. It persists from one species to the next.")),
+                      "photograph. It persists from one species to the next."),
+      shiny::hr(),
+      shiny::actionButton("flip_write", "Write the flip into the file",
+                          class = "btn-warning btn-sm"),
+      shiny::helpText("Writes the photograph AS DISPLAYED back to disk, so that",
+                      "the file and the recorded landmarks agree for every other",
+                      "reader -- launch_fishmorph_basins() draws the points on",
+                      "the file, and only the file. The original is copied into",
+                      "a '_originaux/' subfolder first, and both flip selectors",
+                      "return to None: the flip is now IN the picture and",
+                      "applying it again would undo it.")),
 
     shiny::tabPanel(
       "Checks",
@@ -1426,15 +1933,22 @@ launch_fishmorph_digitizer <- function(
   # session is doing -- which species are offered and what
   # "Save & next" means -- so it belongs to the state of the session,
   # rangee d'actions par specimen ou il etait a un bouton de "Save".
-  side_panel <- shiny::div(
-    class = "sidetabs",
-    shiny::div(class = "modebar",
-      shiny::radioButtons("mode", "Queue",
-        c("To reconstruct" = "reconstruct", "Correct existing" = "correct",
-          "New photographs" = "new"), selected = mode, inline = FALSE)),
-    shiny::uiOutput("progress"), shiny::br(), side_tabs)
+  # The whole panel is the state of a DIGITIZING session -- which queue, which
+  # specimen, which conventions -- and none of it applies while a photograph is
+  # merely being brought in. It is therefore hidden on the intake page rather
+  # than left there greyed out: a control that cannot act on what is on screen
+  # is an invitation to a mistake, not a reminder.
+  side_panel <- shiny::conditionalPanel(
+    "input.page != 'add'",
+    shiny::div(
+      class = "sidetabs",
+      shiny::div(class = "modebar",
+        shiny::radioButtons("mode", "Queue",
+          c("To reconstruct" = "reconstruct", "Correct existing" = "correct",
+            "New photographs" = "new"), selected = mode, inline = FALSE)),
+      shiny::uiOutput("progress"), shiny::br(), side_tabs))
 
-  main_panel <- shiny::tagList(
+  digit_panel <- shiny::tagList(
     # what the session IS, on one line: the paths are declared at the console,
     # they are therefore displayed and not editable.
     shiny::div(class = "sessionbar", shiny::uiOutput("session_info")),
@@ -1454,7 +1968,15 @@ launch_fishmorph_digitizer <- function(
       shiny::div(style = "min-width:260px;",
         shiny::selectizeInput("goto_species", NULL, choices = NULL,
           selected = NULL, width = "260px",
-          options = list(placeholder = "Jump to a species...")))),
+          # sortField on the TEXT and not on selectize's default `$score`: a
+          # search for "Barbus" must return the genus in alphabetical order,
+          # not ranked by how well each name matches, otherwise the congeners
+          # come back shuffled and the neighbours of a species tell you
+          # nothing. Ties are broken by the (already alphabetical) server-side
+          # order.
+          options = list(placeholder = "Jump to a species...",
+                         sortField = list(list(field = "text",
+                                               direction = "asc")))))),
     # --- active-point bar -----------------------------------------------------
     # "Mark NA" acts on the point under the cursor: its place is against the
     # landmark bar, not against "Save & next" where a slip of one
@@ -1502,6 +2024,101 @@ launch_fishmorph_digitizer <- function(
              shiny::uiOutput("lm_legend"))
   )
 
+  # --- page "New species": bringing a photograph INTO the queue ---------------
+  # Until now a photograph entered the session only by being dropped into
+  # `new_photo_dir` from a file manager, before launch, under whatever name the
+  # camera had given it -- and the file name is the ONLY identity an image has
+  # before it is measured (.fm_name_from_file() reads the species off it, and
+  # .fm_photo_index() matches the workbook rows on it). That step is therefore
+  # part of the protocol, and it belongs in the application.
+  #
+  # Four moves, in the only order that is safe: choose the file, name the
+  # specimen, FRAME it, then commit. The framing must come before the first
+  # click and never after it: the digitizer records coordinates in the pixels of
+  # the file, so cropping or rotating a photograph that already carries
+  # landmarks would move every one of them without touching a single recorded
+  # number. Once committed, the picture is frozen and the queue is rebuilt on
+  # the spot -- the new specimen is at the end of the "New photographs" queue,
+  # ready to be measured, without restarting the session.
+  #
+  # NOTHING is written to the workbook here. A row in `new_sheet` is the record
+  # of a MEASUREMENT, and a photograph that has not been digitized has no
+  # measurement to declare; the row is created by "Save & next", keyed on
+  # `photo_file`. Writing an empty row at intake would put specimens in the
+  # sheet that no one has looked at, indistinguishable from specimens whose
+  # landmarks all came out NA.
+  add_panel <- shiny::tagList(
+    shiny::div(class = "sessionbar",
+      "The photograph is COPIED into the new-photographs folder under a name ",
+      "derived from the species; the file you pick is left untouched. ",
+      shiny::tags$code(new_photo_dir)),
+    shiny::fluidRow(
+      shiny::column(5,
+        card_box("1. Photograph",
+          shiny::fileInput("add_file", NULL, multiple = FALSE, width = "100%",
+            accept = c("image/jpeg", "image/png", "image/gif", "image/bmp",
+                       "image/tiff", ".jpg", ".jpeg", ".png", ".gif", ".bmp",
+                       ".tif", ".tiff"),
+            buttonLabel = "Browse...", placeholder = "No file selected"),
+          shiny::helpText("JPEG, PNG, GIF, BMP or TIFF. The picture is read by",
+                          "its real bytes, not by its extension.")),
+        card_box("2. Species name",
+          shiny::textInput("add_species", NULL, "", width = "100%",
+                           placeholder = "Genus species"),
+          shiny::helpText("Pre-filled from the file name when it can be read.",
+                          "It becomes the file name of the copy",
+                          "(Genus_species.jpg) and, at the first save, the",
+                          "Genus.species of the new-specimens sheet."),
+          shiny::div(class = "tbgroup",
+            shiny::actionButton("add_check", "Check against FishBase"),
+            shiny::actionButton("add_accept", "Use the accepted name")),
+          shiny::uiOutput("add_name_info")),
+        card_box("4. Add to the queue",
+          shiny::actionButton("add_commit", "Add and go to the specimen",
+                              class = "btn-primary", width = "100%"),
+          shiny::helpText("Writes the framed picture into the new-photographs",
+                          "folder, rebuilds the queue and opens the specimen in",
+                          "the \"New photographs\" queue. The workbook is",
+                          "untouched until the first \"Save & next\"."),
+          shiny::uiOutput("add_log"))),
+      shiny::column(7,
+        card_box("3. Framing",
+          shiny::div(class = "toolbar",
+            shiny::div(class = "tbgroup",
+              shiny::actionButton("add_rotl", "\u21ba 90\u00b0"),
+              shiny::actionButton("add_rotr", "90\u00b0 \u21bb")),
+            shiny::div(class = "tbsep"),
+            shiny::div(class = "tbgroup",
+              shiny::actionButton("add_fliph", "Mirror \u2194"),
+              shiny::actionButton("add_flipv", "Mirror \u2195")),
+            shiny::div(class = "tbsep"),
+            shiny::div(class = "tbgroup",
+              shiny::actionButton("add_crop", "Crop to selection"),
+              shiny::actionButton("add_reset", "Reset")),
+            shiny::div(class = "tbhint",
+              "Drag a rectangle on the picture, then \"Crop to selection\". ",
+              "Every operation is applied to the COPY and baked into the file: ",
+              "after the first landmark, the framing must not change.")),
+          shiny::plotOutput("add_plot", height = "520px",
+            brush = shiny::brushOpts("add_brush", resetOnNew = TRUE,
+                                     opacity = 0.25, fill = "#2563eb",
+                                     stroke = "#1d4ed8")),
+          shiny::uiOutput("add_info"),
+          shiny::helpText("A lateral view, head to the LEFT and dorsal side UP,",
+                          "is what the seeded landmarks assume; any other",
+                          "orientation is digitizable but starts further from",
+                          "the fish. Crop close to the specimen -- the pixels",
+                          "around it carry no measurement and only cost zoom.",
+                          "Include the scale bar if there is one: points 20 and",
+                          "21 are placed on it and give mm_per_px.")))))
+
+  main_panel <- shiny::tabsetPanel(
+    id = "page", type = if (has_bslib) "pills" else "tabs",
+    shiny::tabPanel("Digitizing", value = "digit",
+                    shiny::div(style = "padding-top:10px;", digit_panel)),
+    shiny::tabPanel("New species", value = "add",
+                    shiny::div(style = "padding-top:10px;", add_panel)))
+
   ui <- if (has_bslib) {
     # `fillable = FALSE`: this page is a document that scrolls, not a dashboard.
     # In a filling page every child negotiates a share of the height, and the
@@ -1531,7 +2148,15 @@ launch_fishmorph_digitizer <- function(
       sel = 1L, zoom = 1, cx = NULL, cy = NULL, hx = NULL, hy = NULL,
       arr = NULL, flip = "none", dispflip = "none", na = integer(0),
       newstamp = 0L,         # incremented at every write into new_sheet
+      photostamp = 0L,       # incremented when the new-photographs FOLDER changes
+                             # (a photograph brought in by the intake page):
+                             # invalidates the "new" queue and its goto list
       flushstamp = 0L,       # incremented at every write of the workbook
+      revstamp = 0L,         # incremented at every write of the review columns
+                             # (lm_df is a plain variable, not a reactive one:
+                             # without this counter the panel showing what the
+                             # FILE says would never notice a second save of
+                             # the same row)
       edited = integer(0),   # points MOVED by the user during this session
                              # (as opposed to points merely loaded from the workbook)
       adjusted = integer(0), # points snapped by the extreme-point convention
@@ -1540,9 +2165,19 @@ launch_fishmorph_digitizer <- function(
 
     # queue and direct-access list of the current mode. In "new" mode the queue
     # indexes the PHOTOGRAPHS of new_photo_dir (and not rows of lm_df).
-    qrows    <- shiny::reactive(switch(rv$mode, correct = q_corr, new = q_new, q_recon))
-    goto_now <- shiny::reactive(switch(rv$mode, correct = choices_corr,
-                                       new = choices_new, choices_recon))
+    # `rv$photostamp` is read on purpose and its value thrown away: the "new"
+    # queue is a plain variable rebuilt by the intake page (new_photos, q_new,
+    # choices_new are reassigned with <<-), and without this dependency a
+    # photograph added during the session would sit in the folder while the
+    # queue kept its length from launch time.
+    qrows    <- shiny::reactive({
+      rv$photostamp
+      switch(rv$mode, correct = q_corr, new = q_new, q_recon)
+    })
+    goto_now <- shiny::reactive({
+      rv$photostamp
+      switch(rv$mode, correct = choices_corr, new = choices_new, choices_recon)
+    })
     is_new   <- shiny::reactive(identical(rv$mode, "new"))
     # entry order and points displayed: + the scale bar 20/21 in "new" mode
     click_order <- shiny::reactive(if (is_new()) .FM_CLICK_ORDER_NEW else .FM_CLICK_ORDER)
@@ -1599,10 +2234,23 @@ launch_fishmorph_digitizer <- function(
     # path of the current photograph: the workbook photo index, or the raw file
     cur_photo <- shiny::reactive({
       i <- cur_idx(); if (length(i) != 1 || is.na(i)) return(NA_character_)
-      if (is_new()) new_photos[i] else {
-        k <- cur_key(); if (is.na(k) || !k %in% names(photos)) NA_character_ else photos[[k]]
-      }
+      # `.photo` was resolved row by row at start-up (photo_file first, species
+      # key as fallback), so this no longer has to know which sheet the row
+      # comes from.
+      if (is_new()) new_photos[i] else lm_df$.photo[i]
     })
+    # sheet and row the current record must be written back to. A row of the
+    # published sheet and a row of the new-specimen sheet are corrected in the
+    # same queue but do NOT go to the same place.
+    cur_sheet <- shiny::reactive(
+      if (is_new()) new_sheet else lm_df$.sheet[cur_row()])
+    cur_srow  <- shiny::reactive(
+      if (is_new()) NA_integer_ else lm_df$.srow[cur_row()])
+    # column index of a name IN THE SHEET the row lives in: the two sheets do
+    # not carry their columns in the same order, and writing at the position
+    # read from the other one would scatter the coordinates across the row.
+    col_of_sheet <- function(sh, nm)
+      if (identical(sh, lm_sheet)) match(nm, lm_hdr) else match(nm, new_hdr)
     # row of new_sheet matching a photograph file (NA if absent). A NON reactive
     # version: `new_df` is not a reactiveVal, so the search must re-read the
     # up-to-date object at save time -- otherwise a second click on "Save"
@@ -1648,6 +2296,78 @@ launch_fishmorph_digitizer <- function(
       v <- suppressWarnings(as.numeric(x))
       if (length(v) != 1 || !is.finite(v)) NA_real_ else v
     }
+    # --- quality and review of the entry --------------------------------------
+    # A score is a number from 1 to 5 or nothing at all: the "Not scored" button
+    # (value 0) and an empty cell are the SAME statement and both come out NA --
+    # a score of 0 would be a sixth grade nobody defined.
+    qual_now <- function() {
+      v <- num1(input$quality)
+      if (!is.finite(v) || v < 1 || v > 5) NA_real_ else round(v)
+    }
+    rev_now <- function() isTRUE(input$reviewed)
+    # a flag read back from a cell: openxlsx returns TRUE/FALSE, an older file or
+    # a hand edit returns "TRUE" / "VRAI" / "1" / "oui" -- all the same statement.
+    as_flag <- function(x) {
+      s <- tolower(trimws(as.character(x)))
+      length(s) == 1L && !is.na(s) && s %in%
+        c("true", "vrai", "1", "yes", "oui", "y", "x", "ok")
+    }
+    # puts the two fields back in the state recorded for a row. Called for every
+    # specimen: without it, saving a species after visiting a reviewed one would
+    # carry that review over to it.
+    load_review <- function(df, row) {
+      q <- NA_real_; fl <- FALSE
+      if (length(row) == 1L && !is.na(row) && row <= nrow(df)) {
+        if ("quality_score" %in% names(df)) q <- num1(df[row, "quality_score"])
+        if ("reviewed" %in% names(df))      fl <- as_flag(df[row, "reviewed"])
+      }
+      shiny::updateRadioButtons(session, "quality",
+        selected = if (is.finite(q) && q >= 1 && q <= 5) as.character(round(q)) else "0")
+      shiny::updateCheckboxInput(session, "reviewed", value = fl)
+    }
+
+    # the declaration of the specimen on screen, in the order of .FM_COLLAPSE so
+    # that two identical statements are written identically -- a column read by
+    # a machine must not depend on the order the boxes were ticked in.
+    collapse_now <- function() {
+      act <- intersect(names(.FM_COLLAPSE), rv$collapse)
+      if (!length(act)) "" else paste(act, collapse = ";")
+    }
+
+    # the coincidences DECLARED on a recorded row, read back from
+    # `collapse_rules`. Unknown identifiers are dropped rather than trusted: the
+    # column is text in a workbook anyone can edit.
+    collapse_declared <- function(df, row) {
+      if (length(row) != 1L || is.na(row) || row > nrow(df) ||
+          !"collapse_rules" %in% names(df)) return(character(0))
+      v <- as.character(df[row, "collapse_rules"])
+      if (length(v) != 1L || is.na(v) || !nzchar(trimws(v))) return(character(0))
+      intersect(trimws(strsplit(v, "[;,[:space:]]+")[[1]]), names(.FM_COLLAPSE))
+    }
+
+    # writes the entry-level columns through the writer of the target sheet.
+    # Written at EVERY save, empty included: the fields were reloaded with the
+    # specimen, so rewriting them PRESERVES them, and clearing one becomes an
+    # explicit act of the operator rather than an accident of navigation.
+    write_entry_meta <- function(wr) {
+      q <- qual_now(); fl <- rev_now()
+      touched <- fl || is.finite(q)
+      wr("quality_score", if (is.finite(q)) q else NA)
+      wr("reviewed", fl)
+      # author and date only when something IS declared: stamping a name on an
+      # empty review would make "nobody has looked at it" indistinguishable from
+      # "somebody looked and said nothing".
+      wr("reviewed_by", if (touched) jr$operator else NA)
+      wr("review_date", if (touched) .fm_iso_now() else NA)
+      # The declared coincidences, in full, every time -- including the empty
+      # string, which is how a rule is REMOVED from a specimen. Deducing them
+      # from the geometry alone was never enough: a copy rule leaves nothing to
+      # tell it apart from a chance coincidence, and an unticked box could not
+      # be distinguished from a box that had never been ticked.
+      wr("collapse_rules", collapse_now())
+      rv$revstamp <- rv$revstamp + 1L
+    }
+
     # mm/px scale from points 20-21 and the ruler length typed in
     mmpp_of <- function(P) {
       mm <- num1(input$ruler_mm)
@@ -1688,11 +2408,11 @@ launch_fishmorph_digitizer <- function(
         if (all(is.finite(xy))) ov[[as.character(pt)]] <- xy
       }
       rv$override <- ov; rv$na <- na; rv$sel <- 22L  # hinge active on opening
-      # A PROJECTION rule leaves no pair of coincident points behind to be
-      # recognized by, unlike the copy rules: it has to be read off the geometry
-      # of the reloaded configuration, or reopening a specimen would silently
-      # drop a statement the operator made about it. The point itself is not
-      # touched -- it is already on the axis -- only its status and the tick box.
+      # The declared coincidences are restored here, or reopening a specimen
+      # would silently drop a statement the operator made about it -- and the
+      # next click, with the rule no longer applied, would quietly undo the
+      # zero. No point is touched: they are already where the rule put them,
+      # only the tick boxes and the "adjusted" status are being restored.
       P0 <- matrix(NA_real_, 25L, 2L)
       if (!is.null(rv$A)) P0[1L, ] <- rv$A
       if (!is.null(rv$B)) P0[2L, ] <- rv$B
@@ -1700,7 +2420,10 @@ launch_fishmorph_digitizer <- function(
         i <- suppressWarnings(as.integer(k))
         if (!is.na(i) && i >= 1L && i <= 25L) P0[i, ] <- ov[[k]]
       }
-      act <- .fm_collapse_detect(P0)
+      # The DECLARATION recorded on the row first -- it is the operator's
+      # statement, and it survives even a rule the geometry can no longer show.
+      # The geometry second, for everything entered before the column existed.
+      act <- union(collapse_declared(df, row), .fm_collapse_detect(P0))
       if (length(act)) {
         rv$collapse <- act
         shiny::updateCheckboxGroupInput(session, "collapse", selected = act)
@@ -1724,6 +2447,11 @@ launch_fishmorph_digitizer <- function(
       rv$collapse <- character(0)
       shiny::updateCheckboxGroupInput(session, "collapse", selected = character(0))
       rv$sel <- 1L; rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL
+      # score and tick: taken from the row of the specimen being opened, or
+      # cleared if it has none. They qualify ONE entry, so they must never
+      # trail behind the operator from one specimen to the next.
+      load_review(if (is_new()) new_df else lm_df,
+                  if (is_new()) cur_new_row() else cur_row())
       if (!length(qrows())) { rv$img <- NULL; rv$arr <- NULL; return() }
       path <- cur_photo()
       img <- if (is.na(path)) NULL else tryCatch(read_img(path), error = function(e) NULL)
@@ -1764,6 +2492,303 @@ launch_fishmorph_digitizer <- function(
         choices = goto_now(), selected = 1L, server = TRUE)
       if (rv$qi == 1L) load_species() else rv$qi <- 1L  # sinon l'observer de qi recharge
     }, ignoreInit = TRUE)
+
+    # ==========================================================================
+    # Page "New species": a photograph enters the queue
+    # ==========================================================================
+    # State of the intake. `orig` is the picture as it was read and is never
+    # touched again -- "Reset" has to be able to undo a crop, and a crop deletes
+    # pixels. `work` is what is on screen and what will be written. Rotations,
+    # mirrors and crops are applied to `work` in the order the operator asks
+    # for them, so the preview IS the file: no transform is deferred to the
+    # write, where it could no longer be seen and checked.
+    add_rv <- shiny::reactiveValues(
+      orig = NULL,     # array as read from the uploaded file
+      work = NULL,     # array as displayed = array to be written
+      src  = NULL,     # path of the uploaded temporary file
+      srcname = NULL,  # its name on the operator's machine
+      png  = FALSE,    # the source really is a PNG (magic bytes)
+      fbase = NULL,    # result of the FishBase check, NULL until asked
+      log  = NULL)     # what the last commit did
+
+    # reading the uploaded file. read_img() detects the REAL format from the
+    # magic bytes: about 7 % of the ".jpg" of this collection are not JPEG, and
+    # trusting the extension is how a picture comes back striped.
+    shiny::observeEvent(input$add_file, {
+      f <- input$add_file
+      if (is.null(f) || !nrow(f)) return()
+      a <- tryCatch(read_img(f$datapath[1]), error = function(e) NULL)
+      if (is.null(a)) {
+        add_rv$orig <- NULL; add_rv$work <- NULL
+        shiny::showNotification(
+          paste0("Unreadable image: ", f$name[1],
+                 ". A GIF/BMP/TIFF needs the 'magick' package."),
+          type = "error", duration = NULL)
+        return()
+      }
+      add_rv$orig <- a; add_rv$work <- a
+      add_rv$src <- f$datapath[1]; add_rv$srcname <- f$name[1]
+      add_rv$png <- .fm_is_png_file(f$datapath[1])
+      add_rv$fbase <- NULL; add_rv$log <- NULL
+      # the file name is the only identity the picture has at this point: it is
+      # proposed, not imposed -- the operator corrects it if the camera or the
+      # collection numbered its files rather than named them.
+      nm <- .fm_name_from_file(f$name[1])
+      if (nzchar(nm)) shiny::updateTextInput(session, "add_species", value = nm)
+    })
+
+    # geometry. Each button rewrites `work`; the brush is cleared with it,
+    # since a selection drawn before a quarter turn no longer designates the
+    # region the operator meant.
+    add_apply <- function(f) {
+      if (is.null(add_rv$work)) return()
+      add_rv$work <- f(add_rv$work)
+      session$resetBrush("add_brush")
+    }
+    shiny::observeEvent(input$add_rotl,  add_apply(function(a) .fm_rot90(a, 1L)))
+    shiny::observeEvent(input$add_rotr,  add_apply(function(a) .fm_rot90(a, 3L)))
+    shiny::observeEvent(input$add_fliph, add_apply(function(a) .fm_mirror(a, "h")))
+    shiny::observeEvent(input$add_flipv, add_apply(function(a) .fm_mirror(a, "v")))
+    shiny::observeEvent(input$add_reset, {
+      add_rv$work <- add_rv$orig
+      session$resetBrush("add_brush")
+    })
+    shiny::observeEvent(input$add_crop, {
+      if (is.null(add_rv$work)) return()
+      b <- input$add_brush
+      if (is.null(b)) {
+        shiny::showNotification("Drag a rectangle on the picture first.",
+                                type = "warning")
+        return()
+      }
+      a <- .fm_crop(add_rv$work, b$xmin, b$xmax, b$ymin, b$ymax)
+      if (is.null(a)) {
+        shiny::showNotification("Selection too small (8 px minimum a side).",
+                                type = "error")
+        return()
+      }
+      add_rv$work <- a
+      session$resetBrush("add_brush")
+    })
+
+    # preview. The user space is the PIXEL grid of the working array, y running
+    # downwards from the top-left corner: the brush then returns coordinates
+    # .fm_crop() can use as they are, with no conversion to get wrong. The
+    # picture is sub-sampled for drawing only (downscale), the array itself is
+    # untouched -- what is written to disk keeps its full resolution.
+    output$add_plot <- shiny::renderPlot({
+      a <- add_rv$work
+      if (is.null(a)) {
+        op <- graphics::par(mar = c(0, 0, 0, 0)); on.exit(graphics::par(op))
+        graphics::plot.new()
+        graphics::text(0.5, 0.5, "Choose a photograph to see it here.",
+                       col = "#9ca3af", cex = 1.1)
+        return(invisible(NULL))
+      }
+      d <- dim(a); H <- d[1]; W <- d[2]
+      op <- graphics::par(mar = c(0, 0, 0, 0)); on.exit(graphics::par(op))
+      graphics::plot(NA, xlim = c(0, W), ylim = c(H, 0), asp = 1,
+                     xaxs = "i", yaxs = "i", axes = FALSE, xlab = "", ylab = "")
+      graphics::rasterImage(grDevices::as.raster(downscale(a)), 0, H, W, 0,
+                            interpolate = FALSE)
+    })
+
+    output$add_info <- shiny::renderUI({
+      a <- add_rv$work
+      if (is.null(a)) return(NULL)
+      d0 <- dim(add_rv$orig); d1 <- dim(a)
+      shiny::div(
+        class = "tbhint", style = "margin-top:6px;",
+        sprintf("%d \u00d7 %d px", d1[2], d1[1]),
+        if (!identical(d0[1:2], d1[1:2]))
+          sprintf(" (original %d \u00d7 %d px)", d0[2], d0[1]),
+        sprintf(" \u00b7 source: %s", add_rv$srcname %||% ""),
+        sprintf(" \u00b7 will be written as .%s", if (add_rv$png) "png" else "jpg"))
+    })
+
+    # --- optional FishBase check ---------------------------------------------
+    # Non-blocking on purpose. A name absent from FishBase may still be a
+    # specimen worth digitizing -- an undescribed form, a local checklist, a
+    # taxonomy more recent than the copy of the database at hand -- so the
+    # check REPORTS and never refuses. Only the form of the binomial is
+    # enforced at commit, because "abramis  Brama" is a typing accident in
+    # every case.
+    shiny::observeEvent(input$add_check, {
+      nm <- .fm_check_binomial(input$add_species)
+      if (!nm$ok) {
+        add_rv$fbase <- list(status = "form", msg = nm$msg, accepted = NA_character_)
+        return()
+      }
+      if (!requireNamespace("rfishbase", quietly = TRUE)) {
+        add_rv$fbase <- list(status = "unavailable", accepted = NA_character_,
+                             msg = "The 'rfishbase' package is not installed.")
+        return()
+      }
+      res <- tryCatch(validate_species_names(nm$name, verbose = FALSE),
+                      error = function(e) NULL)
+      if (is.null(res) || !nrow(res)) {
+        add_rv$fbase <- list(status = "unavailable", accepted = NA_character_,
+                             msg = "FishBase did not answer (network, or server down).")
+        return()
+      }
+      add_rv$fbase <- list(status = as.character(res$status[1]),
+                           accepted = as.character(res$accepted[1]),
+                           msg = "")
+    })
+
+    # replaces the field with the name FishBase accepts. A separate button, not
+    # an automatic rewrite: which name goes into the database is the operator's
+    # call, and a synonym silently corrected is a decision nobody recorded.
+    shiny::observeEvent(input$add_accept, {
+      acc <- add_rv$fbase$accepted %||% NA_character_
+      if (is.na(acc) || !nzchar(acc)) {
+        shiny::showNotification("No accepted name to apply: run the check first.",
+                                type = "warning")
+        return()
+      }
+      shiny::updateTextInput(session, "add_species", value = acc)
+    })
+
+    output$add_name_info <- shiny::renderUI({
+      nm <- .fm_check_binomial(input$add_species)
+      box <- function(col, ...) shiny::div(
+        class = "tbhint",
+        style = paste0("margin-top:6px;color:", col, ";"), ...)
+      if (!nzchar(trimws(as.character(input$add_species %||% ""))))
+        return(box("#9ca3af", "No name yet."))
+      if (!nm$ok) return(box("#b45309", nm$msg))
+      fb <- add_rv$fbase
+      base <- box("#6b7280", "Form accepted: ", shiny::tags$code(nm$name),
+                  " \u00b7 file: ",
+                  shiny::tags$code(basename(.fm_new_photo_path(
+                    new_photo_dir, nm$name, if (add_rv$png) "png" else "jpg"))))
+      if (is.null(fb)) return(base)
+      msg <- switch(
+        fb$status,
+        accepted   = box("#15803d", "FishBase: name accepted."),
+        synonym    = box("#b45309", "FishBase: SYNONYM of ",
+                         shiny::tags$code(fb$accepted %||% "?"),
+                         " -- use it, or keep this one deliberately."),
+        unresolved = box("#b45309", "FishBase: name not resolved. ",
+                         "Digitizing is still possible; the name is recorded as typed."),
+        box("#6b7280", "FishBase: ", fb$msg %||% fb$status))
+      shiny::tagList(base, msg)
+    })
+
+    # --- rebuilding the "new" queue ------------------------------------------
+    # new_photos / q_new / choices_new are plain variables of the enclosing
+    # function, read at launch. Reassigning them with <<- and bumping
+    # rv$photostamp is what makes the queue notice a file that did not exist
+    # when the session started -- the alternative being to close the
+    # application and lose the journal position for one photograph.
+    refresh_new_photos <- function() {
+      new_photos <<- if (dir.exists(new_photo_dir))
+        sort(list.files(new_photo_dir, full.names = TRUE,
+                        pattern = "\\.(jpe?g|png|gif|bmp|tiff?)$",
+                        ignore.case = TRUE))
+      else character(0)
+      q_new <<- seq_along(new_photos)
+      choices_new <<- stats::setNames(seq_along(new_photos), basename(new_photos))
+      rv$photostamp <- rv$photostamp + 1L
+      invisible(new_photos)
+    }
+
+    # --- commit: the picture becomes a specimen of the queue -------------------
+    shiny::observeEvent(input$add_commit, {
+      a <- add_rv$work
+      if (is.null(a)) {
+        shiny::showNotification("Choose a photograph first.", type = "error")
+        return()
+      }
+      nm <- .fm_check_binomial(input$add_species)
+      if (!nm$ok) {
+        shiny::showNotification(paste("Species name:", nm$msg), type = "error")
+        return()
+      }
+      if (!dir.exists(new_photo_dir)) {
+        ok <- dir.create(new_photo_dir, recursive = TRUE, showWarnings = FALSE)
+        if (!ok && !dir.exists(new_photo_dir)) {
+          shiny::showNotification(
+            paste0("Could not create the folder '", new_photo_dir, "'."),
+            type = "error", duration = NULL)
+          return()
+        }
+      }
+      # The output format follows the REAL bytes of the source: a PNG stays a
+      # PNG. Re-encoding a lossless file as JPEG to satisfy an extension would
+      # add compression artefacts to the very pixels the landmarks are read on.
+      ext <- if (add_rv$png) "png" else "jpg"
+      path <- .fm_new_photo_path(new_photo_dir, nm$name, ext)
+      if (is.na(path)) {
+        shiny::showNotification("Unusable species name.", type = "error")
+        return()
+      }
+      wrote <- tryCatch({ .fm_write_img_as(a, path); TRUE },
+                        error = function(e) {
+                          shiny::showNotification(
+                            paste("Writing failed:", conditionMessage(e)),
+                            type = "error", duration = NULL)
+                          FALSE })
+      if (!wrote) return()
+
+      # The FILE AS SUPPLIED is kept beside the queue, under its own name. What
+      # goes into the queue has been cropped and turned, and those pixels are
+      # gone: the backup is the only way back to the framing the photographer
+      # chose, and to the resolution a later re-crop would need. Same
+      # convention as the "bake the flip into the file" button -- one
+      # '_originaux/' folder, and a backup that never overwrites an earlier one.
+      bak <- NA_character_
+      bak_dir <- file.path(new_photo_dir, "_originaux")
+      if (!is.null(add_rv$src) && file.exists(add_rv$src)) {
+        dir.create(bak_dir, showWarnings = FALSE, recursive = TRUE)
+        b <- file.path(bak_dir, paste0(tools::file_path_sans_ext(basename(path)),
+                                       "__", basename(add_rv$srcname %||% "source")))
+        if (!file.exists(b) && file.copy(add_rv$src, b, overwrite = FALSE)) bak <- b
+      }
+
+      refresh_new_photos()
+      i <- match(path, new_photos)
+      if (is.na(i)) i <- match(basename(path), basename(new_photos))
+      add_rv$log <- list(path = path, backup = bak, i = i)
+
+      if (is.na(i)) {
+        shiny::showNotification(
+          paste0("Written to ", path, ", but the queue did not pick it up. ",
+                 "Restart the application."), type = "warning", duration = NULL)
+        return()
+      }
+      # Straight to the specimen: the photograph was brought in to be measured,
+      # and stopping at "it has been added" would ask the operator to find it
+      # again in a list. rv$mode is set BEFORE the radio button so that the
+      # mode observer, which resets the queue to its first entry, sees no
+      # change when the browser echoes the new value back.
+      rv$mode <- "new"
+      shiny::updateRadioButtons(session, "mode", selected = "new")
+      shiny::updateSelectizeInput(session, "goto_species", choices = choices_new,
+                                  selected = i, server = TRUE)
+      if (identical(rv$qi, i)) load_species() else rv$qi <- i
+      shiny::updateTabsetPanel(session, "page", selected = "digit")
+      # the fields are cleared: the next photograph is a different specimen, and
+      # a name left over from the previous one is how two fish end up sharing it.
+      add_rv$orig <- NULL; add_rv$work <- NULL; add_rv$src <- NULL
+      add_rv$srcname <- NULL; add_rv$fbase <- NULL
+      shiny::updateTextInput(session, "add_species", value = "")
+      shiny::showNotification(
+        paste0("Added: ", basename(path), " (", length(new_photos),
+               " photograph(s) in the queue)."), type = "message", duration = 8)
+    })
+
+    output$add_log <- shiny::renderUI({
+      lg <- add_rv$log
+      if (is.null(lg)) return(NULL)
+      shiny::div(
+        class = "tbhint", style = "margin-top:8px;color:#15803d;",
+        "Written: ", shiny::tags$code(basename(lg$path)),
+        if (!is.na(lg$backup))
+          shiny::tagList(" \u00b7 original kept in ",
+                         shiny::tags$code("_originaux/")),
+        " \u00b7 no workbook row until the first \"Save & next\".")
+    })
 
     params <- shiny::reactive({
       d <- .fm_defaults()
@@ -1923,6 +2948,60 @@ launch_fishmorph_digitizer <- function(
       rv$dispflip <- input$flip_disp
       rv$img <- make_disp()
     }, ignoreInit = TRUE)
+    # --- bake the flip into the FILE ------------------------------------------
+    # The rule is "write what you see", and it is the right one for BOTH flips,
+    # which is why they are composed here rather than handled separately:
+    #
+    #   * "photo + landmarks" moved the points with the image, so the points on
+    #     screen sit on the flipped fish and are RECORDED in that frame. Saving
+    #     the flipped image makes the file agree with the record.
+    #   * "photo ONLY" exists for the opposite case -- points loaded mirrored
+    #     relative to their photograph -- and flipping the display is what makes
+    #     them land on the fish again. The recorded points were therefore always
+    #     in the flipped frame, and saving the flipped image makes the file
+    #     agree with them too.
+    #
+    # In both cases the displayed composition is the one the coordinates belong
+    # to. What must NOT be baked in is the fast-display downscale: it is a
+    # rendering shortcut, and writing it would silently shrink the photograph
+    # under coordinates expressed in full-resolution pixels.
+    shiny::observeEvent(input$flip_write, {
+      if (is.null(rv$arr)) {
+        shiny::showNotification("No photograph loaded.", type = "error"); return()
+      }
+      if (identical(rv$flip, "none") && identical(rv$dispflip, "none")) {
+        shiny::showNotification("No flip to write: both selectors are on None.",
+                                type = "message"); return()
+      }
+      f <- cur_photo()
+      if (length(f) != 1 || is.na(f) || !file.exists(f)) {
+        shiny::showNotification("Photograph file not found.", type = "error"); return()
+      }
+      a <- flip_arr(flip_arr(rv$arr, rv$flip), rv$dispflip)
+      res <- tryCatch(.fm_write_img(a, f), error = function(e) e)
+      if (inherits(res, "error")) {
+        shiny::showNotification(paste("Write failed:", conditionMessage(res)),
+                                type = "error", duration = 8)
+        return()
+      }
+      # The session now has to match the disk: the array in memory becomes the
+      # flipped one and both selectors go back to None. Leaving either of them
+      # set would flip an already-flipped picture on the next redraw.
+      rv$arr <- a
+      rv$flip <- "none"; rv$dispflip <- "none"
+      shiny::updateRadioButtons(session, "flip_mode", selected = "none")
+      shiny::updateRadioButtons(session, "flip_disp", selected = "none")
+      rv$img <- make_disp()
+      rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL
+      shiny::showNotification(
+        paste0(basename(f), " written",
+               if (isTRUE(res$jpeg)) " (JPEG re-encoded at quality 0.97)" else "",
+               ". Original kept in _originaux/.",
+               " Remember to save the specimen as well if its points changed:",
+               " this button writes the IMAGE, not the record."),
+        type = "warning", duration = 10)
+    })
+
     # fast-display toggle (does not touch the points)
     shiny::observeEvent(input$fastdisp, { if (!is.null(rv$arr)) rv$img <- make_disp() },
                         ignoreInit = TRUE)
@@ -2059,6 +3138,7 @@ launch_fishmorph_digitizer <- function(
       wr("ruler_mm", if (is.finite(mm)) mm else NA)
       mpp <- mmpp_of(P)
       wr("mm_per_px", if (is.finite(mpp)) round(mpp, 6) else NA)
+      write_entry_meta(wr)
       rv$newstamp <- rv$newstamp + 1L              # invalide cur_new_row()
       TRUE
     }
@@ -2068,7 +3148,7 @@ launch_fishmorph_digitizer <- function(
     #   placed  : placed / moved by hand, or reloaded from an earlier entry
     #   seeded  : STILL AT ITS SEED POSITION, hence never checked -> to be audited
     #   adjusted: snapped by the extreme-point convention (3/4), not pointed at
-    #   derived : calcule automatiquement (8, 9, 11, 15, 23)
+    #   derived : calcule automatiquement (8, 9, 11, 13, 14, 23)
     #   na      : declare non mesurable
     point_status <- function(points) {
       ov <- names(rv$override)
@@ -2094,10 +3174,12 @@ launch_fishmorph_digitizer <- function(
       fm_journal_append(jr, row_key = row_key, coords = P, points = points,
         status = point_status(points), species = species,
         photo_file = basename(cur_photo()), mode = rv$mode,
-        target_sheet = if (is_new()) new_sheet else lm_sheet,
+        target_sheet = if (is_new()) new_sheet else cur_sheet(),
         img_w = rv$w, img_h = rv$h,
         ruler_mm = if (is_new() && is.finite(mm)) mm else NA,
-        mm_per_px = if (is_new() && is.finite(mpp)) mpp else NA)
+        mm_per_px = if (is_new() && is.finite(mpp)) mpp else NA,
+        quality_score = qual_now(), reviewed = rev_now(),
+        collapse = collapse_now())
     }
 
     # --- saving -----------------------------------------------------------------
@@ -2250,7 +3332,9 @@ launch_fishmorph_digitizer <- function(
       }
       journal_write(P, row_key = as.character(cur_name()), points = save_pts,
                     species = as.character(cur_name()))
-      r_excel <- cur_row() + 1L                    # +1 for the header
+      sh      <- cur_sheet()
+      col_of  <- function(nm) col_of_sheet(sh, nm)
+      r_excel <- cur_srow() + 1L                   # +1 for the header
       # A missing column loses the point: ensure_cols() creates them all at
       # start-up (22/23 already exist, 24/25 are added), so this case should
       # never arise -- but if it does (a sheet replaced by hand), the point must
@@ -2262,9 +3346,9 @@ launch_fishmorph_digitizer <- function(
           if (all(is.finite(P[pnum, ]))) dropped <- c(dropped, pnum)
           next
         }
-        openxlsx::writeData(wb, lm_sheet, round(P[pnum, 1], 3),
+        openxlsx::writeData(wb, sh, round(P[pnum, 1], 3),
                             startCol = cx, startRow = r_excel, colNames = FALSE)
-        openxlsx::writeData(wb, lm_sheet, round(P[pnum, 2], 3),
+        openxlsx::writeData(wb, sh, round(P[pnum, 2], 3),
                             startCol = cy, startRow = r_excel, colNames = FALSE)
       }
       if (length(dropped))
@@ -2272,7 +3356,7 @@ launch_fishmorph_digitizer <- function(
           sprintf(paste("Columns absent from '%s': point(s) %s are NOT written",
                         "to the workbook. They are in the journal;",
                         "fishmorph_consolidate() will find them again."),
-                  lm_sheet, paste(dropped, collapse = ", ")),
+                  sh, paste(dropped, collapse = ", ")),
           type = "error", duration = NULL)
       # updates lm_df IN MEMORY so that coming back to the species within the
       # session reloads exactly what has just been saved (24/25 included).
@@ -2282,6 +3366,14 @@ launch_fishmorph_digitizer <- function(
         if (xc %in% names(lm_df)) lm_df[rr, xc] <<- round(P[pnum, 1], 3)
         if (yc %in% names(lm_df)) lm_df[rr, yc] <<- round(P[pnum, 2], 3)
       }
+      # score and review, same row, same rule: workbook AND in-memory copy, so
+      # that coming back to the species within the session finds them again.
+      write_entry_meta(function(col, val) {
+        j <- col_of(col); if (is.na(j)) return(invisible())
+        openxlsx::writeData(wb, sh, val, startCol = j, startRow = r_excel,
+                            colNames = FALSE)
+        if (col %in% names(lm_df)) lm_df[rr, col] <<- val
+      })
       pending <<- pending + 1L
       flush_xlsx()
       rv$saved <- union(rv$saved, cur_row())
@@ -2473,6 +3565,30 @@ launch_fishmorph_digitizer <- function(
         basename(out_path), basename(photo_dir), basename(jr$path), jr$operator))
     })
 
+    # What the FILE says about this specimen, as opposed to what the two fields
+    # above currently show: after a change and before a save the two differ, and
+    # that difference is exactly what the operator needs to see.
+    output$review_info <- shiny::renderUI({
+      rv$qi; rv$revstamp; rv$newstamp                # declencheurs reactifs
+      df  <- if (is_new()) new_df else lm_df
+      row <- if (is_new()) cur_new_row() else cur_row()
+      if (length(row) != 1L || is.na(row) || row > nrow(df))
+        return(shiny::div(class = "progressbox",
+                          "Specimen not recorded yet: no review on file."))
+      g <- function(cc) {
+        if (!cc %in% names(df)) return(NA_character_)
+        v <- as.character(df[row, cc])
+        if (length(v) != 1L || is.na(v) || !nzchar(trimws(v))) NA_character_ else v
+      }
+      q <- num1(g("quality_score"))
+      shiny::div(class = "progressbox", shiny::HTML(sprintf(
+        "In the file: score <b>%s</b> &middot; checked <b>%s</b><br>by <code>%s</code>, %s",
+        if (is.finite(q)) sprintf("%d/5", as.integer(q)) else "-",
+        if (as_flag(g("reviewed"))) "yes" else "no",
+        if (is.na(g("reviewed_by"))) "-" else g("reviewed_by"),
+        if (is.na(g("review_date"))) "-" else g("review_date"))))
+    })
+
     # State of the two writing layers, in the "Checks" tab.
     output$io_info <- shiny::renderUI({
       rv$flushstamp; rv$saved                      # declencheurs reactifs
@@ -2516,6 +3632,14 @@ launch_fishmorph_digitizer <- function(
                          "double-click for the whole view."))
     })
   }
+
+  # The intake page uploads a photograph through the browser, and shiny refuses
+  # anything above 5 Mb by default -- a limit a specimen picture passes without
+  # trying. Raised for the lifetime of the application and restored on exit, so
+  # the session that launched it keeps its own setting.
+  old_maxreq <- getOption("shiny.maxRequestSize")
+  options(shiny.maxRequestSize = 512 * 1024^2)
+  on.exit(options(shiny.maxRequestSize = old_maxreq), add = TRUE)
 
   # Digitizing means clicking nineteen points on a photograph: the RStudio
   # Viewer pane, a few hundred pixels wide, is the one place this application
@@ -2561,8 +3685,10 @@ launch_fishmorph_digitizer <- function(
 #   ruler_mm      = 10,                             # <- length of the ruler 20-21
 #   mode          = "new"
 # )
-# Drop the photographs into `new_photo_dir` BEFORE launching the app: every
-# image in the folder becomes an entry of the queue (several specimens of one
+# Photographs can be dropped into `new_photo_dir` before launching the app, or
+# brought in from the "New species" page while it runs -- browse, name, crop and
+# rotate, commit; the queue is rebuilt on the spot. Either way, every image in
+# the folder becomes an entry of the queue (several specimens of one
 # species are therefore possible, one row each). The species name is pre-filled
 # from the file name and can be changed in the left panel. The key of a row is
 # the `photo_file` column: coming back to a photograph already done reloads its

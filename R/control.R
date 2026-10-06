@@ -283,6 +283,22 @@ compare_segments_landmarks <- function(landmarks, published, id_col = NULL,
             class = "fishmorph_comparison")
 }
 
+#' Summary of a segment-versus-landmark comparison
+#'
+#' Prints what a table of metrics does not say at a glance: the ratio agreement
+#' (n, Pearson r, bias, RMSE) trait by trait, the WEAKEST ratio -- the one that
+#' decides whether the two measurement routes can be pooled at all -- and, when
+#' the comparison was run with `space = TRUE`, the species whose position in the
+#' functional space moves most between the two routes, plus the Procrustes test
+#' of the two spaces.
+#'
+#' @param object A `fishmorph_comparison` object returned by
+#'   [compare_segments_landmarks()].
+#' @param ... Ignored, present for compatibility with the generic.
+#' @return The metrics `data.frame` of `object`, invisibly (NULL if no specimen
+#'   was comparable).
+#' @seealso [compare_segments_landmarks()],
+#'   [plot_segment_landmark_agreement()]
 #' @export
 summary.fishmorph_comparison <- function(object, ...) {
   m <- object$metrics

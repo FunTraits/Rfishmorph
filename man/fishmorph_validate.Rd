@@ -12,7 +12,8 @@ fishmorph_validate(x, expect = c(1:19, 22L, 23L), bounds = .FM_RATIO_BOUNDS)
 
 \item{expect}{Points expected for a complete specimen.}
 
-\item{bounds}{Envelope of the ratios (default: \link{.FM_RATIO_BOUNDS}).}
+\item{bounds}{Envelope of the ratios. Defaults to the internal table
+\code{.FM_RATIO_BOUNDS} (not exported, hence not linkable).}
 }
 \value{
 data.frame: specimen_id, species, photo_file, severity, problem,

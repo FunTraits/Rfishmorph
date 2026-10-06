@@ -17,7 +17,10 @@ fm_journal_append(
   img_w = NA,
   img_h = NA,
   ruler_mm = NA,
-  mm_per_px = NA
+  mm_per_px = NA,
+  quality_score = NA,
+  reviewed = NA,
+  collapse = NA
 )
 }
 \arguments{
@@ -32,6 +35,16 @@ fm_journal_append(
 \item{status}{Named vector (name = point number) of statuses; default "placed".}
 
 \item{species, photo_file, mode, target_sheet, img_w, img_h, ruler_mm, mm_per_px}{Metadata.}
+
+\item{quality_score}{Operator's rating of the entry, 1 (poor) to 5
+(excellent), or NA if the specimen was not rated.}
+
+\item{reviewed}{TRUE if the operator declared the specimen checked, FALSE if
+not, NA if unknown. Repeated on every point line of the record.}
+
+\item{collapse}{Coincidences declared on the specimen (segments measuring
+zero), as a character vector of rule identifiers or a single ";"-joined
+string. NA or empty: none declared.}
 }
 \value{
 The \code{record_id} written (invisibly), or NULL if there was nothing to write.

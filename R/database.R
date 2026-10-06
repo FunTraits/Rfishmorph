@@ -356,7 +356,8 @@ fishmorph_db_connect <- function(db_path, read_only = TRUE) {
 #' @param x A journal directory, or a long data.frame (the output of
 #'   `fishmorph_consolidate(long = TRUE)`).
 #' @param expect Points expected for a complete specimen.
-#' @param bounds Envelope of the ratios (default: [.FM_RATIO_BOUNDS]).
+#' @param bounds Envelope of the ratios. Defaults to the internal table
+#'   `.FM_RATIO_BOUNDS` (not exported, hence not linkable).
 #' @return data.frame: specimen_id, species, photo_file, severity, problem,
 #'   landmark, detail.
 #' @export
