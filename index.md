@@ -147,6 +147,7 @@ DBI::dbDisconnect(con, shutdown = TRUE)
 
 # --- explore --------------------------------------------------------------
 launch_fishmorph_space()                      # embedded 9556-species dataset
+find_fishmorph_species(c("Salmo trutta", "Gobio sp."))  # is it in FISHMORPH?
 ```
 
 ## Data architecture

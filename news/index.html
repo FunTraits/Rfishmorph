@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">Rfishmorph</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,6 +33,47 @@
       <small>Source: <a href="https://github.com/FunTraits/Rfishmorph/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.16.0" id="rfishmorph-0160">Rfishmorph 0.16.0<a class="anchor" aria-label="anchor" href="#rfishmorph-0160"></a></h2>
+<div class="section level3">
+<h3 id="landmarking-tout-automatique-0-16-0">Landmarking tout automatique<a class="anchor" aria-label="anchor" href="#landmarking-tout-automatique-0-16-0"></a></h3>
+<ul><li>Bouton <strong>« Auto (no clicks) »</strong> dans <code><a href="../reference/launch_fishmorph_digitizer.html">launch_fishmorph_digitizer()</a></code> : le reseau global (<code>mlmorph_run_global/model.onnx</code>, <code>ml_morph/train_global.py</code>) trouve le museau (1), la base de la caudale (2) et le dos sur la photo entiere ; chaque couple candidat est verifie par le modele fin, puis le modele place les autres points. Un point deja place garde la priorite ; 1 et 2 detectes restent “predicted” tant qu’ils ne sont pas recliques. Bloc test (points 4-19, mediane % de Bl) : FISHMORPH 1,66 (chaine cliquee 1,58), campagne 1,14 (1,14).</li>
+<li>Charnieres 22 et 24 : un modele entraine avec elles (<code>cnn</code> a 21 sorties) les place a la prediction (statut “predicted”) ; une charniere placee a la main est conservee.</li>
+<li>
+<code><a href="../reference/fm_mlmorph_resources.html">fm_mlmorph_resources()</a></code> renvoie <code>global</code> (chemin du reseau global) ; le dossier <code>mlmorph_run_global</code> n’est jamais propose comme modele de points.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.15.0" id="rfishmorph-0150">Rfishmorph 0.15.0<a class="anchor" aria-label="anchor" href="#rfishmorph-0150"></a></h2>
+<div class="section level3">
+<h3 id="prediction-ml-morph-dans-le-digitizer-0-15-0">Prediction ml-morph dans le digitizer<a class="anchor" aria-label="anchor" href="#prediction-ml-morph-dans-le-digitizer-0-15-0"></a></h3>
+<ul><li><p>NOUVEAU MODELE PAR DEFAUT <code>cnn</code> : reseau de neurones a cartes de chaleur (ResNet-18 pre-entraine ImageNet + decodeur pyramidal, soft-argmax ; <code>ml_morph/train_cnn.py ;</code>fm_mlmorph_resources()<code>reconnait un dossier</code>mlmorph_run_*<code>contenant</code>model.onnx`<code>), exporte en ONNX (</code>mlmorph_run_cnn/model.onnx<code>). Meme repere canonique et meme worker que les modeles dlib : le worker reconnait un fichier</code>.onnx<code>et l'execute avec onnxruntime (a installer une fois :</code>~/.venv_mlmorph/bin/pip install onnxruntime<code>) ; chaque point recoit une confiance (colonne</code>conf<code>). Bloc test (points 3-19, % de Bl) : campagne 1,03 (dlib</code>combined` 1,40), FISHMORPH 1,61 (dlib 2,48) ; meilleur sur 71 % et 78 % des specimens (Wilcoxon apparie p &lt; 1e-15). Les modeles dlib restent proposes dans la liste.</p></li>
+<li><p>Modele <code>combined</code> : un seul modele entraine sur la campagne INTRAIT et sur les photographies FISHMORPH (5 730 especes ; bloc test, points 3-19 : FISHMORPH mediane 2,48 % de Bl, campagne 1,40 %). 737 configurations du classeur, saisies sur une image retournee dans le digitizer sans que le retournement ait ete ecrit dans le fichier (points en miroir de la photo), ont ete detectees et exclues de l’entrainement ; la liste est dans <code>ml_morph/mlmorph_dataset_combined/fishmorph_a_verifier_retournement.csv</code>. Les ratios FISHMORPH n’en sont pas affectes (un miroir conserve les distances), mais ces especes s’affichent en miroir en file “correct”.</p></li>
+<li><p><code><a href="../reference/launch_fishmorph_digitizer.html">launch_fishmorph_digitizer()</a></code> gagne un bouton <strong>Predict 19 landmarks</strong> (barre du point actif) et un choix de modele (onglet Specimen). Une fois 1 et 2 places, un predicteur de forme ml-morph (Porto &amp; Voje 2020 ; dlib) place les points 3-19 que l’operateur n’a PAS places a la main dans la session : un clic et un NA ne sont jamais ecrases ; 1 et 2 gardent les clics ; charnieres (22, 24, 25) et regle (20, 21) ne sont pas predites. En file <code>"new"</code>, la selection passe ensuite directement au premier point de regle manquant (20 puis 21), en vue entiere ; ailleurs au point 3.</p></li>
+<li><p>Nouveaux arguments <code>mlmorph_dir</code>, <code>predictor</code>, <code>python</code>, et nouvelle fonction exportee <code><a href="../reference/fm_mlmorph_resources.html">fm_mlmorph_resources()</a></code>. Les modeles sont ceux du dossier <code>ml_morph/</code> PARTAGE avec <code>intraitR::digitize_landmarks()</code> (<code>mlmorph_run_campaign</code>, <code>mlmorph_run_app</code>, <code>mlmorph_run_aligned</code>, chacun avec son <code>mlmorph_dataset_*</code>) ; sans modele, l’application est inchangee et le bouton est desactive. Le worker Python (<code>inst/mlmorph/predict_new_image.py</code>) est le meme que celui d’intraitR 1.36.0 : il lit <code>canon_params.txt</code> (cadre centre sur le milieu 1-2, sans passe de recentrage) et lit les images SANS appliquer l’orientation EXIF, comme <code><a href="https://rdrr.io/pkg/jpeg/man/readJPEG.html" class="external-link">jpeg::readJPEG()</a></code> – sinon une photographie portant une rotation EXIF etait predite dans un autre repere.</p></li>
+<li><p><code><a href="../reference/fm_mlmorph_resources.html">fm_mlmorph_resources()</a></code> choisit l’interpreteur Python en verifiant qu’il importe <code>numpy</code>, <code>cv2</code> et <code>dlib</code> (argument <code>check_python</code>), et ne resout plus le lien symbolique <code>bin/python</code> d’un venv : <code><a href="https://rdrr.io/r/base/normalizePath.html" class="external-link">normalizePath()</a></code> lancait l’interpreteur de base (Xcode), hors du venv et sans ses paquets (“No module named ‘numpy’”). Le Python retenu est affiche au lancement.</p></li>
+<li><p>Le worker lit la box dlib dans <code>canon_params.txt</code> quand le jeu la declare (<code>box_w</code>, <code>box_h</code>) au lieu de la recalculer sur les TPS : la boucle d’apprentissage (<code>ml_morph/update_combined.py</code>) fige la box, et la recalculer sur un jeu modifie decalait le cadre de prediction de celui de l’entrainement. Sans ces cles, comportement inchange.</p></li>
+<li><p>Le modele recoit l’image dans le repere des coordonnees enregistrees : le fichier lui-meme, ou, si un retournement est actif (ou si le format n’est ni JPEG ni PNG), l’image affichee en pleine resolution ecrite en PNG temporaire.</p></li>
+<li><p>Nouveau statut de journal <code>"predicted"</code> (point ecrit par le modele et non reclique) dans <code>.FM_JOURNAL_STATUS</code>, donc dans le CHECK de <code>landmark_obs</code> ; compte <code>n_predicted</code> dans <code>v_specimen_qc</code> et <code><a href="../reference/fm_journal_history.html">fm_journal_history()</a></code>. Recliquer un point predit le fait passer a <code>"placed"</code>.</p></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.14.0" id="rfishmorph-0140">Rfishmorph 0.14.0<a class="anchor" aria-label="anchor" href="#rfishmorph-0140"></a></h2>
+<div class="section level3">
+<h3 id="un-onglet-species-finder-dans-lexplorateur-de-lespace-morphologique-0-14-0">Un onglet “Species finder” dans l’explorateur de l’espace morphologique<a class="anchor" aria-label="anchor" href="#un-onglet-species-finder-dans-lexplorateur-de-lespace-morphologique-0-14-0"></a></h3>
+<ul><li>
+<code><a href="../reference/launch_fishmorph_space.html">launch_fishmorph_space()</a></code> gagne un onglet <strong>Species finder</strong>, place juste apres “Explore global space”. Il repond a une question simple – <em>mon espece est-elle dans FISHMORPH ?</em> – pour un nom ou une liste (saisie, une espece par ligne, ou fichier CSV/TXT : colonne <code>Species</code>, sinon premiere colonne).</li>
+<li>Trois blocs : (1) le <strong>resultat de la recherche</strong>, une ligne par nom, colore selon le statut ; (2) le <strong>tableau interactif</strong> de toute la table (DT, recherche globale, filtres par colonne – listes deroulantes pour Genus, Family, Order, IUCN, In_space, plages pour les traits), restreignable aux especes trouvees ; un clic sur un resultat y filtre le nom ; (3) la <strong>position dans l’espace global</strong> des especes trouvees et des lignes selectionnees, sur le fond KDE de l’onglet Explore (memes traits, memes axes). Les especes sans les neuf traits sont signalees “not placed” plutot que silencieusement omises. Export CSV des resultats et du tableau filtre.</li>
+<li>Echelle de statuts, du plus au moins certain : <code>exact</code>, <code>close</code> (nom a au plus <code>max_distance</code> editions – faute de frappe, terminaison -us/-a ; un CANDIDAT a verifier, jamais une correction), <code>genus_only</code> (espece absente, genre present : on liste ses especes), <code>absent</code>, <code>invalid</code>. Une correspondance proche n’est pas une synonymie : la validation taxonomique reste <code><a href="../reference/validate_species_names.html">validate_species_names()</a></code> (FishBase).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="find_fishmorph_species--le-moteur-exporte-0-14-0">
+<code>find_fishmorph_species()</code> : le moteur, exporte<a class="anchor" aria-label="anchor" href="#find_fishmorph_species--le-moteur-exporte-0-14-0"></a></h3>
+<ul><li>La logique de recherche vit dans le package et non dans l’app : l’onglet repond exactement ce que repond la console, et c’est ce que verrouille <code>tests/testthat/test-species-finder.R</code>. Nettoyage des noms (underscores, casse, autorite “Linnaeus, 1758”, sous-espece, cf./aff., sp./spp.), distance de Levenshtein (<code><a href="https://rdrr.io/r/utils/adist.html" class="external-link">utils::adist</a></code>) seulement en l’absence de correspondance exacte, colonne <code>complete_traits</code> (l’espece est-elle placee dans l’espace).</li>
+<li>La liste collee n’est PAS coupee sur la virgule, qui separe l’autorite de l’annee.</li>
+<li>Verifie en reel (R 4.x, conteneur) : tests 15/15, <code>testServer()</code> de l’app et rendu navigateur de l’onglet. Sur la table segments, <em>Gobio occitaniae</em> sort <code>genus_only</code> – elle n’existe que dans la table landmarks.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.13.1" id="rfishmorph-0131">Rfishmorph 0.13.1<a class="anchor" aria-label="anchor" href="#rfishmorph-0131"></a></h2>
 <div class="section level3">

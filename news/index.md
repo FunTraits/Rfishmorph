@@ -1,5 +1,147 @@
 # Changelog
 
+## Rfishmorph 0.16.0
+
+### Landmarking tout automatique
+
+- Bouton **« Auto (no clicks) »** dans
+  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+  : le reseau global (`mlmorph_run_global/model.onnx`,
+  `ml_morph/train_global.py`) trouve le museau (1), la base de la
+  caudale (2) et le dos sur la photo entiere ; chaque couple candidat
+  est verifie par le modele fin, puis le modele place les autres points.
+  Un point deja place garde la priorite ; 1 et 2 detectes restent
+  “predicted” tant qu’ils ne sont pas recliques. Bloc test (points 4-19,
+  mediane % de Bl) : FISHMORPH 1,66 (chaine cliquee 1,58), campagne 1,14
+  (1,14).
+- Charnieres 22 et 24 : un modele entraine avec elles (`cnn` a 21
+  sorties) les place a la prediction (statut “predicted”) ; une
+  charniere placee a la main est conservee.
+- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md)
+  renvoie `global` (chemin du reseau global) ; le dossier
+  `mlmorph_run_global` n’est jamais propose comme modele de points.
+
+## Rfishmorph 0.15.0
+
+### Prediction ml-morph dans le digitizer
+
+- NOUVEAU MODELE PAR DEFAUT `cnn` : reseau de neurones a cartes de
+  chaleur (ResNet-18 pre-entraine ImageNet + decodeur pyramidal,
+  soft-argmax ;
+  `ml_morph/train_cnn.py ;`fm_mlmorph_resources()`reconnait un dossier`mlmorph_run\_\*`contenant`model.onnx\``), exporte en ONNX (`mlmorph_run_cnn/model.onnx`). Meme repere canonique et meme worker que les modeles dlib : le worker reconnait un fichier`.onnx`et l'execute avec onnxruntime (a installer une fois :`~/.venv_mlmorph/bin/pip
+  install
+  onnxruntime`) ; chaque point recoit une confiance (colonne`conf`). Bloc test (points 3-19, % de Bl) : campagne 1,03 (dlib`combined\`
+  1,40), FISHMORPH 1,61 (dlib 2,48) ; meilleur sur 71 % et 78 % des
+  specimens (Wilcoxon apparie p \< 1e-15). Les modeles dlib restent
+  proposes dans la liste.
+
+- Modele `combined` : un seul modele entraine sur la campagne INTRAIT et
+  sur les photographies FISHMORPH (5 730 especes ; bloc test, points
+  3-19 : FISHMORPH mediane 2,48 % de Bl, campagne 1,40 %). 737
+  configurations du classeur, saisies sur une image retournee dans le
+  digitizer sans que le retournement ait ete ecrit dans le fichier
+  (points en miroir de la photo), ont ete detectees et exclues de
+  l’entrainement ; la liste est dans
+  `ml_morph/mlmorph_dataset_combined/fishmorph_a_verifier_retournement.csv`.
+  Les ratios FISHMORPH n’en sont pas affectes (un miroir conserve les
+  distances), mais ces especes s’affichent en miroir en file “correct”.
+
+- [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+  gagne un bouton **Predict 19 landmarks** (barre du point actif) et un
+  choix de modele (onglet Specimen). Une fois 1 et 2 places, un
+  predicteur de forme ml-morph (Porto & Voje 2020 ; dlib) place les
+  points 3-19 que l’operateur n’a PAS places a la main dans la session :
+  un clic et un NA ne sont jamais ecrases ; 1 et 2 gardent les clics ;
+  charnieres (22, 24, 25) et regle (20, 21) ne sont pas predites. En
+  file `"new"`, la selection passe ensuite directement au premier point
+  de regle manquant (20 puis 21), en vue entiere ; ailleurs au point 3.
+
+- Nouveaux arguments `mlmorph_dir`, `predictor`, `python`, et nouvelle
+  fonction exportee
+  [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md).
+  Les modeles sont ceux du dossier `ml_morph/` PARTAGE avec
+  `intraitR::digitize_landmarks()` (`mlmorph_run_campaign`,
+  `mlmorph_run_app`, `mlmorph_run_aligned`, chacun avec son
+  `mlmorph_dataset_*`) ; sans modele, l’application est inchangee et le
+  bouton est desactive. Le worker Python
+  (`inst/mlmorph/predict_new_image.py`) est le meme que celui d’intraitR
+  1.36.0 : il lit `canon_params.txt` (cadre centre sur le milieu 1-2,
+  sans passe de recentrage) et lit les images SANS appliquer
+  l’orientation EXIF, comme
+  [`jpeg::readJPEG()`](https://rdrr.io/pkg/jpeg/man/readJPEG.html) –
+  sinon une photographie portant une rotation EXIF etait predite dans un
+  autre repere.
+
+- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md)
+  choisit l’interpreteur Python en verifiant qu’il importe `numpy`,
+  `cv2` et `dlib` (argument `check_python`), et ne resout plus le lien
+  symbolique `bin/python` d’un venv :
+  [`normalizePath()`](https://rdrr.io/r/base/normalizePath.html) lancait
+  l’interpreteur de base (Xcode), hors du venv et sans ses paquets (“No
+  module named ‘numpy’”). Le Python retenu est affiche au lancement.
+
+- Le worker lit la box dlib dans `canon_params.txt` quand le jeu la
+  declare (`box_w`, `box_h`) au lieu de la recalculer sur les TPS : la
+  boucle d’apprentissage (`ml_morph/update_combined.py`) fige la box, et
+  la recalculer sur un jeu modifie decalait le cadre de prediction de
+  celui de l’entrainement. Sans ces cles, comportement inchange.
+
+- Le modele recoit l’image dans le repere des coordonnees enregistrees :
+  le fichier lui-meme, ou, si un retournement est actif (ou si le format
+  n’est ni JPEG ni PNG), l’image affichee en pleine resolution ecrite en
+  PNG temporaire.
+
+- Nouveau statut de journal `"predicted"` (point ecrit par le modele et
+  non reclique) dans `.FM_JOURNAL_STATUS`, donc dans le CHECK de
+  `landmark_obs` ; compte `n_predicted` dans `v_specimen_qc` et
+  [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_history.md).
+  Recliquer un point predit le fait passer a `"placed"`.
+
+## Rfishmorph 0.14.0
+
+### Un onglet “Species finder” dans l’explorateur de l’espace morphologique
+
+- [`launch_fishmorph_space()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_space.md)
+  gagne un onglet **Species finder**, place juste apres “Explore global
+  space”. Il repond a une question simple – *mon espece est-elle dans
+  FISHMORPH ?* – pour un nom ou une liste (saisie, une espece par ligne,
+  ou fichier CSV/TXT : colonne `Species`, sinon premiere colonne).
+- Trois blocs : (1) le **resultat de la recherche**, une ligne par nom,
+  colore selon le statut ; (2) le **tableau interactif** de toute la
+  table (DT, recherche globale, filtres par colonne – listes deroulantes
+  pour Genus, Family, Order, IUCN, In_space, plages pour les traits),
+  restreignable aux especes trouvees ; un clic sur un resultat y filtre
+  le nom ; (3) la **position dans l’espace global** des especes trouvees
+  et des lignes selectionnees, sur le fond KDE de l’onglet Explore
+  (memes traits, memes axes). Les especes sans les neuf traits sont
+  signalees “not placed” plutot que silencieusement omises. Export CSV
+  des resultats et du tableau filtre.
+- Echelle de statuts, du plus au moins certain : `exact`, `close` (nom a
+  au plus `max_distance` editions – faute de frappe, terminaison -us/-a
+  ; un CANDIDAT a verifier, jamais une correction), `genus_only` (espece
+  absente, genre present : on liste ses especes), `absent`, `invalid`.
+  Une correspondance proche n’est pas une synonymie : la validation
+  taxonomique reste
+  [`validate_species_names()`](https://funtraits.github.io/Rfishmorph/reference/validate_species_names.md)
+  (FishBase).
+
+### `find_fishmorph_species()` : le moteur, exporte
+
+- La logique de recherche vit dans le package et non dans l’app :
+  l’onglet repond exactement ce que repond la console, et c’est ce que
+  verrouille `tests/testthat/test-species-finder.R`. Nettoyage des noms
+  (underscores, casse, autorite “Linnaeus, 1758”, sous-espece, cf./aff.,
+  sp./spp.), distance de Levenshtein
+  ([`utils::adist`](https://rdrr.io/r/utils/adist.html)) seulement en
+  l’absence de correspondance exacte, colonne `complete_traits`
+  (l’espece est-elle placee dans l’espace).
+- La liste collee n’est PAS coupee sur la virgule, qui separe l’autorite
+  de l’annee.
+- Verifie en reel (R 4.x, conteneur) : tests 15/15, `testServer()` de
+  l’app et rendu navigateur de l’onglet. Sur la table segments, *Gobio
+  occitaniae* sort `genus_only` – elle n’existe que dans la table
+  landmarks.
+
 ## Rfishmorph 0.13.1
 
 ### La taxonomie n’est plus soumise a la priorite des magasins

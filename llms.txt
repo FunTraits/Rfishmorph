@@ -147,6 +147,7 @@ DBI::dbDisconnect(con, shutdown = TRUE)
 
 # --- explore --------------------------------------------------------------
 launch_fishmorph_space()                      # embedded 9556-species dataset
+find_fishmorph_species(c("Salmo trutta", "Gobio sp."))  # is it in FISHMORPH?
 ```
 
 ## Data architecture
@@ -252,6 +253,9 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 - [`correct_zero_ratio_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/correct_zero_ratio_landmarks.md)
   : Apply the "zero-ratio" conventions to landmarks
 
+- [`find_fishmorph_species()`](https://funtraits.github.io/Rfishmorph/reference/find_fishmorph_species.md)
+  : Look up species in the FISHMORPH table
+
 - [`fishmorph_basin_indices()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_basin_indices.md)
   : Functional-diversity indices of one assemblage
 
@@ -320,6 +324,10 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 
 - [`fm_journal_status()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_status.md)
   : State of the journals in a directory
+
+- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md)
+  : Locate the ml-morph resources used by the digitizer's "Predict"
+  button
 
 - [`fm_save_workbook_atomic()`](https://funtraits.github.io/Rfishmorph/reference/fm_save_workbook_atomic.md)
   : ATOMIC write of an openxlsx workbook

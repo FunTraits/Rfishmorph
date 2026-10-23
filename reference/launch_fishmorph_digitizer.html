@@ -15,7 +15,7 @@ fishmorph_consolidate() recovers all the work."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">Rfishmorph</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,6 +65,9 @@ fly (see <code>mode</code>). Every record goes first to an append-only journal
 <span>  operator <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  xlsx_flush_every <span class="op">=</span> <span class="fl">10L</span>,</span>
 <span>  mode <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"reconstruct"</span>, <span class="st">"correct"</span>, <span class="st">"new"</span><span class="op">)</span>,</span>
+<span>  mlmorph_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  predictor <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  python <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  launch.browser <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -144,6 +147,26 @@ reloaded from the workbook) or
 "new" (new photographs from <code>new_photo_dir</code>, appended to <code>new_sheet</code>).
 Switchable at any moment through the "Queue" selector in the app. If the
 requested queue is empty, the app starts on another one.</p></dd>
+
+
+<dt id="arg-mlmorph-dir">mlmorph_dir<a class="anchor" aria-label="anchor" href="#arg-mlmorph-dir"></a></dt>
+<dd><p>Folder of trained ml-morph models (<code>mlmorph_run_*/</code> with
+the matching <code>mlmorph_dataset_*/</code>), shared with
+<code>intraitR::digitize_landmarks()</code>. <code>NULL</code> looks at the environment variables
+<code>RFISHMORPH_MLMORPH_DIR</code> then <code>INTRAITR_MLMORPH_DIR</code>. Without a model the
+app works as before and "Predict 19 landmarks" is disabled. See
+<code><a href="fm_mlmorph_resources.html">fm_mlmorph_resources()</a></code>.</p></dd>
+
+
+<dt id="arg-predictor">predictor<a class="anchor" aria-label="anchor" href="#arg-predictor"></a></dt>
+<dd><p>Optional path of one specific <code>predictor.dat</code>, listed first
+among the models.</p></dd>
+
+
+<dt id="arg-python">python<a class="anchor" aria-label="anchor" href="#arg-python"></a></dt>
+<dd><p>Python interpreter with <code>numpy</code>, <code>opencv-python</code> and <code>dlib</code>.
+<code>NULL</code> -&gt; <code>~/.venv_mlmorph/bin/python</code>, then <code>python3</code> (see
+<code><a href="fm_mlmorph_resources.html">fm_mlmorph_resources()</a></code>).</p></dd>
 
 
 <dt id="arg-launch-browser">launch.browser<a class="anchor" aria-label="anchor" href="#arg-launch-browser"></a></dt>
@@ -339,6 +362,25 @@ intake would be indistinguishable from a specimen whose landmarks all came
 out <code>NA</code>.</p>
 <p>The queue is rebuilt on the spot – the alternative being to close the
 application and lose the journal position for the sake of one photograph.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="predicted-landmarks-ml-morph-">Predicted landmarks (ml-morph)<a class="anchor" aria-label="anchor" href="#predicted-landmarks-ml-morph-"></a></h2>
+
+
+<p>Once the snout (1) and the caudal base (2) are placed, "Predict 19
+landmarks" runs a trained ml-morph shape predictor (Porto &amp; Voje 2020) on the
+photograph and replaces the anatomical points 3-19 that have NOT been placed
+by hand in this session – a click is a measurement and is never overwritten,
+nor is a point declared <code>NA</code>. LM1 and LM2 keep the operator's clicks; the
+hinges (22, 24, 25) and the scale bar (20, 21) are not predicted. The model
+sees the image in the pixel frame of the record: when a flip is active, the
+flipped picture is what it is given. In the <code>"new"</code> queue the selection then
+moves to the first scale-bar point still missing (20, then 21), with the
+whole photograph in view; elsewhere to point 3, for review. A predicted point
+left untouched is journaled with the status <code>"predicted"</code>; clicked again, it
+becomes <code>"placed"</code>. In the <code>"reconstruct"</code> queue the prediction replaces the
+placement deduced from the published segments, whose lengths are then no
+longer imposed.</p>
     </div>
     <div class="section level2">
     <h2 id="order-of-the-queues">Order of the queues<a class="anchor" aria-label="anchor" href="#order-of-the-queues"></a></h2>

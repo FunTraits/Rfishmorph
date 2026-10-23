@@ -24,6 +24,9 @@ launch_fishmorph_digitizer(
   operator = NULL,
   xlsx_flush_every = 10L,
   mode = c("reconstruct", "correct", "new"),
+  mlmorph_dir = NULL,
+  predictor = NULL,
+  python = NULL,
   launch.browser = TRUE
 )
 ```
@@ -106,6 +109,26 @@ launch_fishmorph_digitizer(
   `new_photo_dir`, appended to `new_sheet`). Switchable at any moment
   through the "Queue" selector in the app. If the requested queue is
   empty, the app starts on another one.
+
+- mlmorph_dir:
+
+  Folder of trained ml-morph models (`mlmorph_run_*/` with the matching
+  `mlmorph_dataset_*/`), shared with `intraitR::digitize_landmarks()`.
+  `NULL` looks at the environment variables `RFISHMORPH_MLMORPH_DIR`
+  then `INTRAITR_MLMORPH_DIR`. Without a model the app works as before
+  and "Predict 19 landmarks" is disabled. See
+  [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md).
+
+- predictor:
+
+  Optional path of one specific `predictor.dat`, listed first among the
+  models.
+
+- python:
+
+  Python interpreter with `numpy`, `opencv-python` and `dlib`. `NULL`
+  -\> `~/.venv_mlmorph/bin/python`, then `python3` (see
+  [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md)).
 
 - launch.browser:
 
@@ -319,6 +342,24 @@ specimen whose landmarks all came out `NA`.
 The queue is rebuilt on the spot – the alternative being to close the
 application and lose the journal position for the sake of one
 photograph.
+
+## Predicted landmarks (ml-morph)
+
+Once the snout (1) and the caudal base (2) are placed, "Predict 19
+landmarks" runs a trained ml-morph shape predictor (Porto & Voje 2020)
+on the photograph and replaces the anatomical points 3-19 that have NOT
+been placed by hand in this session – a click is a measurement and is
+never overwritten, nor is a point declared `NA`. LM1 and LM2 keep the
+operator's clicks; the hinges (22, 24, 25) and the scale bar (20, 21)
+are not predicted. The model sees the image in the pixel frame of the
+record: when a flip is active, the flipped picture is what it is given.
+In the `"new"` queue the selection then moves to the first scale-bar
+point still missing (20, then 21), with the whole photograph in view;
+elsewhere to point 3, for review. A predicted point left untouched is
+journaled with the status `"predicted"`; clicked again, it becomes
+`"placed"`. In the `"reconstruct"` queue the prediction replaces the
+placement deduced from the published segments, whose lengths are then no
+longer imposed.
 
 ## Order of the queues
 
