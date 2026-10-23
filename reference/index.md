@@ -163,6 +163,10 @@
 - [`load_fishmorph_reference()`](https://funtraits.github.io/Rfishmorph/reference/load_fishmorph_reference.md)
   : Load the FISHMORPH reference database
 
+- [`max_pair_distance()`](https://funtraits.github.io/Rfishmorph/reference/max_pair_distance.md)
+  : Diameter of a point cloud: the distance between its two most distant
+  points
+
 - [`new_fishmorph_species()`](https://funtraits.github.io/Rfishmorph/reference/new_fishmorph_species.md)
   : Create a FISHMORPH record for a new species
 
@@ -171,6 +175,10 @@
 
 - [`plot(`*`<fishmorph_projection>`*`)`](https://funtraits.github.io/Rfishmorph/reference/plot.fishmorph_projection.md)
   : Plot specimens projected into the global FISHMORPH space
+
+- [`plot_fishmorph_density()`](https://funtraits.github.io/Rfishmorph/reference/plot_fishmorph_density.md)
+  : Density curves of the FISHMORPH space, per functional axis and per
+  ratio
 
 - [`plot_functional_space()`](https://funtraits.github.io/Rfishmorph/reference/plot_functional_space.md)
   : Plot species in the FISHMORPH functional space (landmark- or
@@ -187,6 +195,9 @@
 
 - [`plot_trait_space()`](https://funtraits.github.io/Rfishmorph/reference/plot_trait_space.md)
   : Plot the FISHMORPH functional trait space (intraitR style)
+
+- [`plotly_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/plotly_fishmorph.md)
+  : Interactive FISHMORPH projection plot (plotly)
 
 - [`prepare_fishmorph_basins()`](https://funtraits.github.io/Rfishmorph/reference/prepare_fishmorph_basins.md)
   [`print(`*`<fishmorph_basin_cache>`*`)`](https://funtraits.github.io/Rfishmorph/reference/prepare_fishmorph_basins.md)

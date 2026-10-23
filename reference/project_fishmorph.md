@@ -4,8 +4,9 @@ Builds a fixed functional trait space by PCA of a reference database of
 FISHMORPH ratios (typically the full FISHMORPH database, ~9,000
 species), then places new specimens into that same, frozen space with
 [`stats::predict()`](https://rdrr.io/r/stats/predict.html), without
-re-estimating the ordination. Faithful port of
-`intraitR::project_fishmorph()`.
+re-estimating the ordination. `intraitR::project_fishmorph()` is a thin
+layer over this function that adds the intraspecific-variability
+analysis (`itv_proportion()`).
 
 ## Usage
 
@@ -23,6 +24,7 @@ project_fishmorph(
   log_transform = TRUE,
   scale = TRUE,
   axes = c(1, 2),
+  volume_dims = 2L,
   na_action = c("omit", "fail")
 )
 ```
@@ -93,6 +95,12 @@ project_fishmorph(
 
   Length-2 integer vector of ordination axes (default `c(1, 2)`).
 
+- volume_dims:
+
+  Number of leading principal components on which functional volumes are
+  later computed (default `2L`); stored in the result and checked
+  against the number of components available.
+
 - na_action:
 
   `"omit"` (default) drops specimens with missing traits; `"fail"`
@@ -100,11 +108,18 @@ project_fishmorph(
 
 ## Value
 
-An object of class `"fishmorph_projection"` with `scores`,
-`global_scores`, `global_species`, `groups`, `var_explained`,
-`loadings`, `axes`, `traits`, `n_reference` and `pca`. Has
-[`print()`](https://rdrr.io/r/base/print.html) and
-[`plot()`](https://rdrr.io/r/graphics/plot.default.html) methods.
+An object of class `"fishmorph_projection"` with `scores` (plotted
+axes), `scores_all` (all components), `global_scores`,
+`global_scores_all`, `global_species`, `groups`, `var_explained`,
+`loadings`, `axes`, `volume_dims`, `traits`, `trait_ranges_reference`
+(per-trait min/max/range of the reference on the analysis scale),
+`reference_traits`, `specimen_traits` (analysis scale), `n_reference`
+and `pca`. Has [`print()`](https://rdrr.io/r/base/print.html),
+[`plot()`](https://rdrr.io/r/graphics/plot.default.html),
+[`plotly_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/plotly_fishmorph.md)
+and
+[`plot_fishmorph_density()`](https://funtraits.github.io/Rfishmorph/reference/plot_fishmorph_density.md)
+methods/companions.
 
 ## References
 

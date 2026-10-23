@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">Rfishmorph</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,6 +33,18 @@
       <small>Source: <a href="https://github.com/FunTraits/Rfishmorph/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.17.0" id="rfishmorph-0170">Rfishmorph 0.17.0<a class="anchor" aria-label="anchor" href="#rfishmorph-0170"></a></h2>
+<div class="section level3">
+<h3 id="rfishmorph-devient-le-proprietaire-de-la-visualisation-de-lespace-fishmorph-0-17-0">Rfishmorph devient le proprietaire de la visualisation de l’espace FISHMORPH<a class="anchor" aria-label="anchor" href="#rfishmorph-devient-le-proprietaire-de-la-visualisation-de-lespace-fishmorph-0-17-0"></a></h3>
+<p>Premiere etape du dedoublonnage intraitR / Rfishmorph / FishInTrait : Rfishmorph est le package de visualisation (et de reference FISHMORPH), intraitR celui de la mesure. Les fonctions ci-dessous n’existent plus qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.</p>
+<ul><li>NOUVEAU (deplaces depuis intraitR) : <code><a href="../reference/plotly_fishmorph.html">plotly_fishmorph()</a></code>, <code><a href="../reference/plot_fishmorph_density.html">plot_fishmorph_density()</a></code>, <code><a href="../reference/max_pair_distance.html">max_pair_distance()</a></code>. Ils acceptent tout objet <code>"fishmorph_projection"</code>, y compris la sous-classe <code>"intrait_fishmorph_projection"</code> d’intraitR (dont les resultats ITV s’affichent dans les infobulles quand ils sont presents).</li>
+<li>
+<code><a href="../reference/project_fishmorph.html">project_fishmorph()</a></code> est desormais L’implementation unique : nouvel argument <code>volume_dims</code> et nouveaux champs <code>scores_all</code>, <code>global_scores_all</code>, <code>volume_dims</code>, <code>trait_ranges_reference</code>, <code>reference_traits</code>, <code>specimen_traits</code>. <code>intraitR::project_fishmorph()</code> l’appelle et n’y ajoute que <code>itv_proportion()</code>.</li>
+<li>NOUVEAU : primitives <code><a href="../reference/fm_plot_ordination.html">fm_plot_ordination()</a></code>, <code><a href="../reference/fm_plot_ordination.html">fm_group_palette()</a></code>, <code><a href="../reference/fm_plot_ordination.html">fm_abbreviate_species()</a></code> (exportees, hors index) : le moteur de trace et le cache de couleurs sont partages avec intraitR. Une espece garde donc la meme couleur quel que soit le package qui dessine (il y avait deux caches).</li>
+<li>Tests deplaces : <code>test-plotly_fishmorph.R</code>, <code>test-plot_fishmorph_density.R</code>, <code>test-plot-ordination.R</code> (helpers du moteur).</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.16.0" id="rfishmorph-0160">Rfishmorph 0.16.0<a class="anchor" aria-label="anchor" href="#rfishmorph-0160"></a></h2>
 <div class="section level3">

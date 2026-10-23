@@ -46,6 +46,7 @@
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fm_journal_read.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fm_journal_status.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/fm_plot_ordination.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/fm_save_workbook_atomic.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/freshwater_fish_list.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/group_colors.html</loc></url>
@@ -60,14 +61,17 @@
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/load_fishmorph_phylo_axes.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/load_fishmorph_phylogeny.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/load_fishmorph_reference.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/max_pair_distance.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/new_fishmorph_species.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/phylo_pcoa.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot.fishmorph_projection.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_fishmorph_density.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_functional_space.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_landmarks.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_segment_landmark_agreement.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_trait_distributions.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/plot_trait_space.html</loc></url>
+<url><loc>https://funtraits.github.io/Rfishmorph/reference/plotly_fishmorph.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/prepare_fishmorph_basins.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/project_fishmorph.html</loc></url>
 <url><loc>https://funtraits.github.io/Rfishmorph/reference/read_landmarks_csv.html</loc></url>
