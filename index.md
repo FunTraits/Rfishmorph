@@ -110,42 +110,31 @@ ref2 <- add_fishmorph_species(ref, rec)
 fw <- freshwater_fish_list()
 ```
 
-### 5. Digitize photographs, store them safely, explore the space
+### 5. Explore the space (digitizing lives in intraitR)
 
-The two ends of the workflow are Shiny applications. **Photographs stay
-on your machine**: only their file name and pixel dimensions are ever
-recorded.
+Since 0.18.0 Rfishmorph only *visualises* FISHMORPH. Digitizing
+photographs, the append-only landmark journal and the DuckDB database
+moved to **intraitR**, where a single digitizer serves both FISHMORPH
+and intraspecific campaigns. The old entry points
+([`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+`fm_journal_*()`,
+[`fishmorph_consolidate()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+[`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+…) are defunct stubs that name their replacement
+(`?Rfishmorph-defunct`).
 
 ``` r
 
-# --- digitize -------------------------------------------------------------
-# Three switchable queues: species without landmarks ("reconstruct"), already
-# landmarked species to review ("correct"), and brand-new photographs ("new").
-launch_fishmorph_digitizer(
-  xlsx_path     = "FishMORPH/FISHMORPH_PUBLI_9556sp.xlsx",
-  photo_dir     = "FishMORPH/Photos utilisées",   # stays local
-  new_photo_dir = "FishMORPH/Photos nouvelles",   # stays local
-  operator      = "AT",
-  mode          = "new")
-
-# --- consolidate ----------------------------------------------------------
+# --- digitize, consolidate, build the database: intraitR ------------------
+intraitR::digitize_fishmorph_reference(
+  xlsx_path = "FishMORPH/FISHMORPH_PUBLI_9556sp.xlsx",
+  operator  = "AT", mode = "new")
 jdir <- "FishMORPH/landmark_journal"
-fm_journal_status(jdir)                       # what is actually in there?
-base <- fishmorph_consolidate(jdir)           # wide table, one row per key
-qc   <- fishmorph_journal_qc(jdir)            # never-verified points, gaps
+intraitR::landmark_journal_status(jdir)
+base <- intraitR::consolidate_landmarks(jdir)
+res  <- intraitR::fishmorph_build_db(jdir, db_path = "FishMORPH/fishmorph.duckdb")
 
-# --- database + archives (needs DBI + duckdb) -----------------------------
-res <- fishmorph_build_db(jdir,
-         db_path    = "FishMORPH/fishmorph.duckdb",
-         export_dir = "FishMORPH/exports")     # Parquet + CSV
-subset(res$issues, severite == "erreur")
-
-con <- fishmorph_db_connect("FishMORPH/fishmorph.duckdb")
-DBI::dbGetQuery(con, "FROM v_ratios WHERE species = ?",
-                params = list("Coilia.nasus"))
-DBI::dbDisconnect(con, shutdown = TRUE)
-
-# --- explore --------------------------------------------------------------
+# --- explore: Rfishmorph --------------------------------------------------
 launch_fishmorph_space()                      # embedded 9556-species dataset
 find_fishmorph_species(c("Salmo trutta", "Gobio sp."))  # is it in FISHMORPH?
 ```
@@ -159,15 +148,14 @@ Digitizing never overwrites what is already written:
                      one TSV per session)    views, SQL)
 
 The journal is the only durable layer. The database and the workbook are
-**derived artefacts**:
-[`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)
-rebuilds them from scratch in seconds, which is what makes it safe to
-keep them in a synchronised folder. Never write into the database by
-hand — the next rebuild will erase it.
+**derived artefacts**: `intraitR::fishmorph_build_db()` rebuilds them
+from scratch in seconds, which is what makes it safe to keep them in a
+synchronised folder. Never write into the database by hand — the next
+rebuild will erase it.
 
 Each point carries a `status` that a wide coordinate table cannot
-express: `placed` (clicked), `seeded` (**still at its seed position,
-never checked**), `derived` (computed: 8, 9, 11, 15, 23), `na` (declared
+express: `clicked`, `seeded` (**still at its seed position, never
+checked**), `derived` (computed: 8, 9, 11, 15, 23), `na` (declared
 unmeasurable). In `reconstruct` mode a `seeded` point still sits exactly
 where the input segments put it, so validating its ratio against the
 FISHMORPH envelope is circular — filter on `status` before any

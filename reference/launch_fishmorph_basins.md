@@ -30,12 +30,12 @@ launch_fishmorph_basins(
 - photos:
 
   Optional folder of species photographs, the same one
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
-  reads (`Genus_species.jpg`, matched on a normalised name). The
-  photographs stay LOCAL and are never copied into the cache: 7,588 of
-  them are about a gigabyte, and the panel that displays them only ever
-  needs one at a time. Without this argument the specimen panel still
-  draws the landmarks and the segments, on a blank background.
+  `intraitR::digitize_fishmorph_reference()` reads (`Genus_species.jpg`,
+  matched on a normalised name). The photographs stay LOCAL and are
+  never copied into the cache: 7,588 of them are about a gigabyte, and
+  the panel that displays them only ever needs one at a time. Without
+  this argument the specimen panel still draws the landmarks and the
+  segments, on a blank background.
 
 - launch.browser:
 

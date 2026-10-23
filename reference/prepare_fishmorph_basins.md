@@ -64,19 +64,17 @@ print(x, ...)
   Optional path to the FISHMORPH publication workbook (sheets
   `Global_Landmark` and `Global_segments`, keyed on `Genus.species`).
   Adding it lets the application draw each species the way
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
-  does – landmarks, body segments and reference lines – read-only. Only
-  the COORDINATES are stored: the photographs stay on disk and are found
-  at launch through
+  `intraitR::digitize_fishmorph_reference()` does – landmarks, body
+  segments and reference lines – read-only. Only the COORDINATES are
+  stored: the photographs stay on disk and are found at launch through
   [`launch_fishmorph_basins()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_basins.md)'s
   `photos` argument.
 
 - landmarks_db:
 
   Optional path to the digitizer's DuckDB store
-  ([`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)).
-  Its coordinates OVERRIDE the workbook's, species by species – the same
-  precedence
+  (`intraitR::fishmorph_build_db()`). Its coordinates OVERRIDE the
+  workbook's, species by species – the same precedence
   [`build_fishmorph_landmark_table()`](https://funtraits.github.io/Rfishmorph/reference/build_fishmorph_landmark_table.md)
   applies, and for the same reason: the workbook is rewritten every
   `xlsx_flush_every` records while the journal is written at every one,

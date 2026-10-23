@@ -17,7 +17,7 @@ under a second."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">Rfishmorph</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,7 +107,7 @@ names are matched loosely, and a missing centroid is computed.</p></dd>
 <dd><p>Optional path to the FISHMORPH publication workbook (sheets
 <code>Global_Landmark</code> and <code>Global_segments</code>, keyed on <code>Genus.species</code>). Adding
 it lets the application draw each species the way
-<code><a href="launch_fishmorph_digitizer.html">launch_fishmorph_digitizer()</a></code> does – landmarks, body segments and
+<code>intraitR::digitize_fishmorph_reference()</code> does – landmarks, body segments and
 reference lines – read-only. Only the COORDINATES are stored: the
 photographs stay on disk and are found at launch through
 <code><a href="launch_fishmorph_basins.html">launch_fishmorph_basins()</a></code>'s <code>photos</code> argument.</p></dd>
@@ -115,7 +115,7 @@ photographs stay on disk and are found at launch through
 
 <dt id="arg-landmarks-db">landmarks_db<a class="anchor" aria-label="anchor" href="#arg-landmarks-db"></a></dt>
 <dd><p>Optional path to the digitizer's DuckDB store
-(<code><a href="fishmorph_build_db.html">fishmorph_build_db()</a></code>). Its coordinates OVERRIDE the workbook's, species
+(<code>intraitR::fishmorph_build_db()</code>). Its coordinates OVERRIDE the workbook's, species
 by species – the same precedence <code><a href="build_fishmorph_landmark_table.html">build_fishmorph_landmark_table()</a></code>
 applies, and for the same reason: the workbook is rewritten every
 <code>xlsx_flush_every</code> records while the journal is written at every one, so a

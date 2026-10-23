@@ -23,8 +23,8 @@ launch_fishmorph_space(data = NULL, source = NULL, launch.browser = TRUE, ...)
 
   Path to a trait CSV (semicolon-separated) replacing the bundled data
   set. Useful to work on a more recent version, or on the result of
-  [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)
-  exported to CSV. `NULL` uses the data set bundled with the package.
+  `intraitR::fishmorph_build_db()` exported to CSV. `NULL` uses the data
+  set bundled with the package.
 
 - source:
 
@@ -53,8 +53,7 @@ Invisibly `NULL`; called for its side effect.
 
 [`find_fishmorph_species()`](https://funtraits.github.io/Rfishmorph/reference/find_fishmorph_species.md)
 for the same species search from the console,
-[`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
-to produce the landmarks,
+`intraitR::digitize_fishmorph_reference()` to produce the landmarks,
 [`set_fishmorph_source()`](https://funtraits.github.io/Rfishmorph/reference/set_fishmorph_source.md),
 [`project_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/project_fishmorph.md)
 to project specimens by computation rather than interactively.

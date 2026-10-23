@@ -54,20 +54,8 @@
 - [`fishmorph_basin_indices()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_basin_indices.md)
   : Functional-diversity indices of one assemblage
 
-- [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)
-  : Rebuild the DuckDB database from the journals
-
-- [`fishmorph_consolidate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_consolidate.md)
-  : Rebuild the analysable table from the journals
-
-- [`fishmorph_db_connect()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_db_connect.md)
-  : Open the database (read-only by default)
-
 - [`fishmorph_fishbase_size()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_fishbase_size.md)
   : Maximum standard length and weight from FishBase
-
-- [`fishmorph_journal_qc()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_journal_qc.md)
-  : Quick quality control of a consolidation
 
 - [`fishmorph_landmark_pairs()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_landmark_pairs.md)
   : Segment -\> landmark-pair map
@@ -102,31 +90,6 @@
 - [`fishmorph_traits()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_traits.md)
   : Full FISHMORPH trait table (segments + ratios)
 
-- [`fishmorph_validate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_validate.md)
-  : Structural AND morphometric control
-
-- [`fm_journal_append()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_append.md)
-  : Append one record (one specimen) to the journal
-
-- [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_history.md)
-  : History of the records of one key
-
-- [`fm_journal_open()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_open.md)
-  : Open a session journal (append-only)
-
-- [`fm_journal_read()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_read.md)
-  : Read and concatenate every journal in a directory
-
-- [`fm_journal_status()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_status.md)
-  : State of the journals in a directory
-
-- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md)
-  : Locate the ml-morph resources used by the digitizer's "Predict"
-  button
-
-- [`fm_save_workbook_atomic()`](https://funtraits.github.io/Rfishmorph/reference/fm_save_workbook_atomic.md)
-  : ATOMIC write of an openxlsx workbook
-
 - [`freshwater_fish_list()`](https://funtraits.github.io/Rfishmorph/reference/freshwater_fish_list.md)
   : Build a global list of freshwater fishes
 
@@ -144,12 +107,6 @@
 
 - [`launch_fishmorph_basins()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_basins.md)
   : Global drainage-basin explorer
-
-- [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
-  : Interactive tool for digitizing the FISHMORPH landmarks
-
-- [`launch_fishmorph_reconstructor()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_reconstructor.md)
-  : Launch the reconstruction tool (deprecated)
 
 - [`launch_fishmorph_space()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_space.md)
   : Morphological space explorer for freshwater fishes

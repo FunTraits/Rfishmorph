@@ -54,9 +54,8 @@ reconstruct_fishmorph_landmarks(
 - preset:
 
   Default placement rules: `"template"` (generic gabarit) or `"app"` to
-  reproduce
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
-  / `fishmorph_reconstruct_app` (offsets recalibrated on the workbook
+  reproduce `intraitR::digitize_fishmorph_reference()` /
+  `fishmorph_reconstruct_app` (offsets recalibrated on the workbook
   medians). Both keep the segment lengths **locked** to the input, so
   the round-trip stays exact regardless of preset.
 

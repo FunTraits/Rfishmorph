@@ -1,5 +1,38 @@
 # Changelog
 
+## Rfishmorph 0.18.0
+
+### Rfishmorph ne mesure plus
+
+Fin de la fusion des deux digitizers : Rfishmorph est le package de la
+REFERENCE FISHMORPH et de la VISUALISATION de son espace fonctionnel ;
+la mesure est dans intraitR (\>= 1.44.0).
+
+- SUPPRIMES (fichiers `digitizer-app.R`, `journal.R`, `database.R`,
+  `mlmorph.R`, `shiny-reconstructor.R`, `inst/mlmorph/`, ~5 100 lignes)
+  : le digitizer, son journal, la base DuckDB, la prediction ml-morph et
+  le reconstructeur deja deprecie. Leurs remplacants dans intraitR :
+  `digitize_fishmorph_reference()` (memes arguments ; meme application
+  que `digitize_landmarks()`),
+  `landmark_journal_read/status/history/qc()`, `consolidate_landmarks()`
+  (relisent aussi les journaux ecrits ici),
+  [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fishmorph_validate()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fishmorph_db_connect()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  `write_workbook_atomic()`.
+- Les 14 noms exportes restent, pour UNE version, sous forme de
+  fonctions defuntes : chaque appel s’arrete en nommant son remplacant
+  (voir
+  [`?"Rfishmorph-defunct"`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)).
+- Tests retires avec le code qu’ils testaient (journal, base,
+  conventions et points confondus du digitizer, ml-morph) ; intraitR
+  couvre leurs equivalents.
+- `inst/MEMO_requetes_db.md` deplace dans intraitR ; `MEMO_fonctions.md`
+  annote.
+- Les messages qui renvoyaient au digitizer (explorateur des bassins,
+  [`correct_geometry_conventions()`](https://funtraits.github.io/Rfishmorph/reference/correct_geometry_conventions.md))
+  renvoient a `intraitR::digitize_fishmorph_reference()`.
+
 ## Rfishmorph 0.17.0
 
 ### Rfishmorph devient le proprietaire de la visualisation de l’espace FISHMORPH
@@ -39,7 +72,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### Landmarking tout automatique
 
 - Bouton **« Auto (no clicks) »** dans
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   : le reseau global (`mlmorph_run_global/model.onnx`,
   `ml_morph/train_global.py`) trouve le museau (1), la base de la
   caudale (2) et le dos sur la photo entiere ; chaque couple candidat
@@ -54,13 +87,13 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 - Statut **“validated”** et bouton **« Validate points »** dans le
   digitizer : points predits ou semes regardes et acceptes sans etre
   deplaces ; compteur `n_validated` dans
-  [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_history.md)
+  [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   et la vue `v_specimen_qc`.
 - Echelle automatique : sans clic sur la regle, la prediction place
   20-21 sur la regle (statut “predicted”, notification a verifier).
 - Case **« Hinges 22/24 (curved fish) »** dans le digitizer (decochee
   par defaut) : la prediction place aussi les charnieres 22/24.
-- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md)
+- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   renvoie `global` (chemin du reseau global) ; le dossier
   `mlmorph_run_global` n’est jamais propose comme modele de points.
 
@@ -89,7 +122,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
   Les ratios FISHMORPH n’en sont pas affectes (un miroir conserve les
   distances), mais ces especes s’affichent en miroir en file “correct”.
 
-- [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+- [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   gagne un bouton **Predict 19 landmarks** (barre du point actif) et un
   choix de modele (onglet Specimen). Une fois 1 et 2 places, un
   predicteur de forme ml-morph (Porto & Voje 2020 ; dlib) place les
@@ -101,7 +134,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 
 - Nouveaux arguments `mlmorph_dir`, `predictor`, `python`, et nouvelle
   fonction exportee
-  [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md).
+  [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md).
   Les modeles sont ceux du dossier `ml_morph/` PARTAGE avec
   `intraitR::digitize_landmarks()` (`mlmorph_run_campaign`,
   `mlmorph_run_app`, `mlmorph_run_aligned`, chacun avec son
@@ -115,7 +148,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
   sinon une photographie portant une rotation EXIF etait predite dans un
   autre repere.
 
-- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/fm_mlmorph_resources.md)
+- [`fm_mlmorph_resources()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   choisit l’interpreteur Python en verifiant qu’il importe `numpy`,
   `cv2` et `dlib` (argument `check_python`), et ne resout plus le lien
   symbolique `bin/python` d’un venv :
@@ -137,7 +170,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 - Nouveau statut de journal `"predicted"` (point ecrit par le modele et
   non reclique) dans `.FM_JOURNAL_STATUS`, donc dans le CHECK de
   `landmark_obs` ; compte `n_predicted` dans `v_specimen_qc` et
-  [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_history.md).
+  [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md).
   Recliquer un point predit le fait passer a `"placed"`.
 
 ## Rfishmorph 0.14.0
@@ -504,7 +537,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 - Le journal porte les deux memes champs au niveau de l’ENREGISTREMENT
   (`quality_score`, `reviewed`, repetes sur chaque ligne de point, faute
   d’un en-tete par enregistrement) et
-  [`fishmorph_consolidate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_consolidate.md)
+  [`fishmorph_consolidate()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   les remonte dans le tableau large. Le journal disait comment chaque
   POINT avait ete obtenu (`placed`, `seeded`, `derived`…) ; il dit
   maintenant ce que vaut la saisie entiere, jugement que seul
@@ -886,7 +919,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### Le digitizer peut inscrire le retournement dans le fichier
 
 - Nouveau bouton « Write the flip into the file » (onglet Display de
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)).
+  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)).
   Il ecrit la photographie TELLE QU’AFFICHEE, parce que le fichier etait
   jusqu’ici le seul objet a ne pas savoir qu’on l’avait retourne : le
   retournement vivait dans la session, les coordonnees etaient
@@ -990,7 +1023,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 - Panneau SPECIMEN sous l’espace fonctionnel : la photographie de
   l’espece selectionnee, ses landmarks, ses segments et ses reperes,
   dessines avec les conventions de
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   – et rien d’autre. Aucun gestionnaire de clic, aucune ecriture : c’est
   l’image du digitizer sans ses verbes.
   - `prepare_fishmorph_basins(landmarks = )` prend le classeur de
@@ -1159,7 +1192,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### La base refusait le statut « adjusted », que le journal ecrit depuis 0.6.0
 
 - SYMPTOME :
-  [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md)
+  [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   echouait sur `CHECK constraint failed on table landmark_obs`, apres
   avoir pourtant lu et valide tout le journal.
 - CAUSE : le vocabulaire des statuts est defini une fois, dans
@@ -1216,7 +1249,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### A coincidence with a LINE: point 4 on the mid axis
 
 - New rule in the *Coincident points* bar of
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md):
+  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md):
   **`4 on 22-24`**. Point 4, the ventral end of the body depth, is
   projected perpendicularly onto the mid axis 22 -\> 24. It keeps the
   abscissa that was clicked along the axis and its height becomes zero;
@@ -1434,7 +1467,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### A tabbed, themed digitizer
 
 - The side panel of
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   is a **tabset** — `Specimen`, `Display`, `Checks`, `Seed` — instead of
   one long scroll. The controls fall into groups touched at different
   rhythms (once per specimen, once per photograph, once per session),
@@ -1489,7 +1522,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 
 ### Extreme-point convention checked on save
 
-- [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md)
+- [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   now verifies, when “Save & next” is pressed, that landmark 3 is the
   most **dorsal** and landmark 4 the most **ventral** point of the body
   outline — the definition of `Bd` as the maximum body depth. A specimen
@@ -1530,7 +1563,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 - New journal status **`"adjusted"`** for points relocated by that
   automatic correction, distinct from `"placed"` (operator-pointed) and
   `"seeded"` (never verified).
-  [`fishmorph_journal_qc()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_journal_qc.md)
+  [`fishmorph_journal_qc()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   reports them, so an auto-corrected `Bd` remains traceable specimen by
   specimen.
 
@@ -1544,7 +1577,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### Digitizing application
 
 - New
-  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_digitizer.md):
+  [`launch_fishmorph_digitizer()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md):
   works directly on the FISHMORPH workbook with three switchable queues
   — `"reconstruct"` (species without landmarks), `"correct"` (already
   landmarked, reloaded from the workbook) and `"new"` (photographs
@@ -1555,7 +1588,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 - In `"new"` mode there are no measured segments: points are seeded from
   the **median segment/Bl proportions of the 9556 reference species**,
   then corrected by hand. No length is locked in that mode.
-- [`launch_fishmorph_reconstructor()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_reconstructor.md)
+- [`launch_fishmorph_reconstructor()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   is **deprecated** and redirects to the new tool. The old single-photo
   prototype was removed: two implementations of the same geometry were
   bound to diverge.
@@ -1563,13 +1596,13 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### Data layer: append-only journal
 
 - New
-  [`fm_journal_open()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_open.md),
-  [`fm_journal_append()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_append.md),
-  [`fm_journal_read()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_read.md),
-  [`fm_journal_status()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_status.md),
-  [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/fm_journal_history.md),
-  [`fishmorph_consolidate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_consolidate.md),
-  [`fishmorph_journal_qc()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_journal_qc.md).
+  [`fm_journal_open()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fm_journal_append()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fm_journal_read()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fm_journal_status()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fm_journal_history()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fishmorph_consolidate()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fishmorph_journal_qc()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md).
 - Every save is appended to a per-session TSV in long format (one row
   per point) before anything is written to the workbook. A crash can at
   worst truncate the last line, which is detected and discarded on read.
@@ -1577,7 +1610,7 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
   the operator), `derived`, `na`. This distinction is invisible in a
   wide coordinate table and is what makes quality control possible.
 - Workbook writes are now **atomic**
-  ([`fm_save_workbook_atomic()`](https://funtraits.github.io/Rfishmorph/reference/fm_save_workbook_atomic.md):
+  ([`fm_save_workbook_atomic()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md):
   temporary file then rename, previous generation kept as `.prev.xlsx`)
   and batched via `xlsx_flush_every`, taking the multi-megabyte rewrite
   out of the input loop.
@@ -1585,13 +1618,13 @@ qu’ici ; intraitR les reexporte, donc aucun script n’est a modifier.
 ### Data layer: derived DuckDB database
 
 - New
-  [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_build_db.md),
-  [`fishmorph_db_connect()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_db_connect.md),
-  [`fishmorph_validate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_validate.md).
+  [`fishmorph_build_db()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fishmorph_db_connect()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md),
+  [`fishmorph_validate()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md).
 - Three constrained tables (`record`, `specimen`, `landmark_obs`) and
   three views (`v_landmarks_wide`, `v_ratios`, `v_specimen_qc`), plus
   Parquet and CSV exports for archiving.
-- [`fishmorph_validate()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_validate.md)
+- [`fishmorph_validate()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md)
   adds morphometric plausibility on top of SQL constraints, comparing
   each specimen to the empirical envelope (quantiles 0.001 and 0.999) of
   the 9556 reference species.
@@ -1708,7 +1741,7 @@ stand-alone package.
   guarantee:
   [`reconstruct_fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/reconstruct_fishmorph_landmarks.md),
   [`check_reconstruction_roundtrip()`](https://funtraits.github.io/Rfishmorph/reference/check_reconstruction_roundtrip.md),
-  [`launch_fishmorph_reconstructor()`](https://funtraits.github.io/Rfishmorph/reference/launch_fishmorph_reconstructor.md).
+  [`launch_fishmorph_reconstructor()`](https://funtraits.github.io/Rfishmorph/reference/Rfishmorph-defunct.md).
 - Functional trait space (frozen PCA + projection):
   [`fishmorph_trait_space()`](https://funtraits.github.io/Rfishmorph/reference/fishmorph_trait_space.md),
   [`project_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/project_fishmorph.md),
