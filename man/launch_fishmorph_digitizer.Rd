@@ -17,6 +17,9 @@ launch_fishmorph_digitizer(
   operator = NULL,
   xlsx_flush_every = 10L,
   mode = c("reconstruct", "correct", "new"),
+  mlmorph_dir = NULL,
+  predictor = NULL,
+  python = NULL,
   launch.browser = TRUE
 )
 }
@@ -71,6 +74,20 @@ reloaded from the workbook) or
 "new" (new photographs from \code{new_photo_dir}, appended to \code{new_sheet}).
 Switchable at any moment through the "Queue" selector in the app. If the
 requested queue is empty, the app starts on another one.}
+
+\item{mlmorph_dir}{Folder of trained ml-morph models (\verb{mlmorph_run_*/} with
+the matching \verb{mlmorph_dataset_*/}), shared with
+\code{intraitR::digitize_landmarks()}. \code{NULL} looks at the environment variables
+\code{RFISHMORPH_MLMORPH_DIR} then \code{INTRAITR_MLMORPH_DIR}. Without a model the
+app works as before and "Predict 19 landmarks" is disabled. See
+\code{\link[=fm_mlmorph_resources]{fm_mlmorph_resources()}}.}
+
+\item{predictor}{Optional path of one specific \code{predictor.dat}, listed first
+among the models.}
+
+\item{python}{Python interpreter with \code{numpy}, \code{opencv-python} and \code{dlib}.
+\code{NULL} -> \verb{~/.venv_mlmorph/bin/python}, then \code{python3} (see
+\code{\link[=fm_mlmorph_resources]{fm_mlmorph_resources()}}).}
 
 \item{launch.browser}{Where the application opens. \code{TRUE} (default) or
 \code{"browser"} forces the system browser, past the RStudio Viewer pane --
@@ -279,6 +296,24 @@ out \code{NA}.
 
 The queue is rebuilt on the spot -- the alternative being to close the
 application and lose the journal position for the sake of one photograph.
+}
+
+\section{Predicted landmarks (ml-morph)}{
+
+Once the snout (1) and the caudal base (2) are placed, "Predict 19
+landmarks" runs a trained ml-morph shape predictor (Porto & Voje 2020) on the
+photograph and replaces the anatomical points 3-19 that have NOT been placed
+by hand in this session -- a click is a measurement and is never overwritten,
+nor is a point declared \code{NA}. LM1 and LM2 keep the operator's clicks; the
+hinges (22, 24, 25) and the scale bar (20, 21) are not predicted. The model
+sees the image in the pixel frame of the record: when a flip is active, the
+flipped picture is what it is given. In the \code{"new"} queue the selection then
+moves to the first scale-bar point still missing (20, then 21), with the
+whole photograph in view; elsewhere to point 3, for review. A predicted point
+left untouched is journaled with the status \code{"predicted"}; clicked again, it
+becomes \code{"placed"}. In the \code{"reconstruct"} queue the prediction replaces the
+placement deduced from the published segments, whose lengths are then no
+longer imposed.
 }
 
 \section{Order of the queues}{

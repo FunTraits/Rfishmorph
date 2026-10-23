@@ -1218,6 +1218,22 @@
 #' The queue is rebuilt on the spot -- the alternative being to close the
 #' application and lose the journal position for the sake of one photograph.
 #'
+#' @section Predicted landmarks (ml-morph):
+#' Once the snout (1) and the caudal base (2) are placed, "Predict 19
+#' landmarks" runs a trained ml-morph shape predictor (Porto & Voje 2020) on the
+#' photograph and replaces the anatomical points 3-19 that have NOT been placed
+#' by hand in this session -- a click is a measurement and is never overwritten,
+#' nor is a point declared `NA`. LM1 and LM2 keep the operator's clicks; the
+#' hinges (22, 24, 25) and the scale bar (20, 21) are not predicted. The model
+#' sees the image in the pixel frame of the record: when a flip is active, the
+#' flipped picture is what it is given. In the `"new"` queue the selection then
+#' moves to the first scale-bar point still missing (20, then 21), with the
+#' whole photograph in view; elsewhere to point 3, for review. A predicted point
+#' left untouched is journaled with the status `"predicted"`; clicked again, it
+#' becomes `"placed"`. In the `"reconstruct"` queue the prediction replaces the
+#' placement deduced from the published segments, whose lengths are then no
+#' longer imposed.
+#'
 #' @section Order of the queues:
 #' The `"reconstruct"` and `"correct"` queues run in ALPHABETICAL order of the
 #' species, not in the order of the workbook rows -- which is an accident of how
@@ -1275,6 +1291,17 @@
 #'   "new" (new photographs from `new_photo_dir`, appended to `new_sheet`).
 #'   Switchable at any moment through the "Queue" selector in the app. If the
 #'   requested queue is empty, the app starts on another one.
+#' @param mlmorph_dir Folder of trained ml-morph models (`mlmorph_run_*/` with
+#'   the matching `mlmorph_dataset_*/`), shared with
+#'   `intraitR::digitize_landmarks()`. `NULL` looks at the environment variables
+#'   `RFISHMORPH_MLMORPH_DIR` then `INTRAITR_MLMORPH_DIR`. Without a model the
+#'   app works as before and "Predict 19 landmarks" is disabled. See
+#'   [fm_mlmorph_resources()].
+#' @param predictor Optional path of one specific `predictor.dat`, listed first
+#'   among the models.
+#' @param python Python interpreter with `numpy`, `opencv-python` and `dlib`.
+#'   `NULL` -> `~/.venv_mlmorph/bin/python`, then `python3` (see
+#'   [fm_mlmorph_resources()]).
 #' @param launch.browser Where the application opens. `TRUE` (default) or
 #'   `"browser"` forces the system browser, past the RStudio Viewer pane --
 #'   which is a few hundred pixels wide and the one place an application built
@@ -1308,6 +1335,9 @@ launch_fishmorph_digitizer <- function(
     operator  = NULL,
     xlsx_flush_every = 10L,
     mode      = c("reconstruct", "correct", "new"),
+    mlmorph_dir = NULL,
+    predictor = NULL,
+    python    = NULL,
     launch.browser = TRUE) {
 
   mode <- match.arg(mode)
@@ -1329,6 +1359,16 @@ launch_fishmorph_digitizer <- function(
   if (!file.exists(out_path)) file.copy(xlsx_path, out_path)
 
   shiny <- asNamespace("shiny")
+
+  # --- ml-morph prediction (optional) -----------------------------------------
+  mlm <- fm_mlmorph_resources(mlmorph_dir, predictor, python)
+  if (nrow(mlm$models))
+    message("ml-morph: ", nrow(mlm$models), " model(s) [", paste(mlm$models$name, collapse = ", "),
+            "]; Python = ", mlm$python)
+  if (!nrow(mlm$models))
+    message("No ml-morph model found: 'Predict 19 landmarks' is disabled. ",
+            "Pass `mlmorph_dir` (the folder holding mlmorph_run_*/predictor.dat) ",
+            "or set RFISHMORPH_MLMORPH_DIR.")
 
   # --- reading the two sheets from the COPY (so work can be resumed) ---------
   # the raw headers are read separately: read.xlsx may rename the columns that
@@ -1822,7 +1862,17 @@ launch_fishmorph_digitizer <- function(
       shiny::helpText("Moving a point then propagates the FISHMORPH conventions",
                       "to the points that depend on it: segment 3-4",
                       "perpendicular to the axis, eye group on one vertical,",
-                      "belly line aligned. Unticked, each point moves alone.")),
+                      "belly line aligned. Unticked, each point moves alone."),
+      shiny::hr(),
+      shiny::strong("Prediction (ml-morph)"),
+      if (nrow(mlm$models))
+        shiny::selectInput("mlm_model", "Model",
+                           choices = stats::setNames(mlm$models$name, mlm$models$name))
+      else shiny::helpText("No trained model found: pass `mlmorph_dir` to",
+                           "launch_fishmorph_digitizer()."),
+      shiny::helpText("'Predict 19 landmarks' (above the photograph) needs 1 and",
+                      "2. It fills the points 3-19 you have not placed by hand;",
+                      "your clicks and the NA are kept.")),
 
     # --- quality and review, once per specimen --------------------------------
     # The journal already says how each POINT was obtained (placed, seeded,
@@ -1984,6 +2034,17 @@ launch_fishmorph_digitizer <- function(
     shiny::div(
       class = "toolbar",
       shiny::actionButton("set_na", "Mark NA", class = "btn-warning"),
+      shiny::div(class = "tbsep"),
+      if (nrow(mlm$models)) shiny::actionButton("predict", "Predict 19 landmarks")
+      else shiny::tags$button(type = "button", class = "btn btn-default",
+                              disabled = "disabled", title = "No ml-morph model found",
+                              "Predict 19 landmarks"),
+      # fully automatic mode: needs the global network (mlmorph_run_global)
+      if (nrow(mlm$models) && !is.null(mlm$global) && !is.na(mlm$global))
+        shiny::actionButton("predict_auto", "Auto (no clicks)",
+          title = paste("The global network finds the snout (1), the caudal base (2)",
+                        "and the dorsal side on the whole photograph, then the model",
+                        "places the other points. Points already placed are kept.")),
       shiny::div(class = "tbsep"),
       shiny::div(class = "tbgroup",
         shiny::actionButton("zoom_in", "Zoom +"),
@@ -2161,6 +2222,8 @@ launch_fishmorph_digitizer <- function(
                              # (as opposed to points merely loaded from the workbook)
       adjusted = integer(0), # points snapped by the extreme-point convention
                              # (status "adjusted" in the journal)
+      predicted = integer(0), # points written by the ml-morph predictor and not
+                             # touched since (status "predicted" in the journal)
       collapse = character(0))  # segments declared zero on THIS specimen
 
     # queue and direct-access list of the current mode. In "new" mode the queue
@@ -2442,7 +2505,7 @@ launch_fishmorph_digitizer <- function(
 
     load_species <- function() {
       rv$A <- NULL; rv$B <- NULL; rv$P <- NULL; rv$override <- list(); rv$na <- integer(0)
-      rv$edited <- integer(0); rv$adjusted <- integer(0)
+      rv$edited <- integer(0); rv$adjusted <- integer(0); rv$predicted <- integer(0)
       # A declared zero is a statement about ONE species: it never carries over.
       rv$collapse <- character(0)
       shiny::updateCheckboxGroupInput(session, "collapse", selected = character(0))
@@ -2885,6 +2948,7 @@ launch_fishmorph_digitizer <- function(
     shiny::observeEvent(input$click, {
       if (is.null(rv$img)) return()
       pt <- c(input$click$x, input$click$y); s <- rv$sel
+      if (s %in% c(1L, 2L)) rv$predicted <- setdiff(rv$predicted, s)  # clicked -> a measurement
       if (s == 1L) rv$A <- pt
       else if (s == 2L) rv$B <- pt
       else {  # re-inserted at the end of the list: the last point moved drives its group
@@ -2895,6 +2959,7 @@ launch_fishmorph_digitizer <- function(
         # a point snapped by the convention then pointed at again by hand becomes
         # a MEASUREMENT again: it must no longer come out as "adjusted".
         rv$adjusted <- setdiff(rv$adjusted, s)
+        rv$predicted <- setdiff(rv$predicted, s)       # clicked -> a measurement
       }
       rv$sel <- .fm_next(s, click_order())
     })
@@ -2907,9 +2972,91 @@ launch_fishmorph_digitizer <- function(
       if (rv$sel %in% c(1L, 2L)) return()          # snout/caudal required for the axis
       rv$na <- union(rv$na, rv$sel)
       rv$adjusted <- setdiff(rv$adjusted, rv$sel)
+      rv$predicted <- setdiff(rv$predicted, rv$sel)
       ov <- rv$override; ov[[as.character(rv$sel)]] <- NULL; rv$override <- ov
       rv$sel <- .fm_next(rv$sel, click_order())
     })
+
+    # --- ml-morph prediction ----------------------------------------------------
+    # The image handed to the worker must be in the pixel frame of the record:
+    # the file itself when nothing is flipped and OpenCV reads it as R does
+    # (JPEG, PNG); otherwise the full-resolution array AS DISPLAYED (flip +
+    # display flip), written to a temporary lossless PNG.
+    worker_image <- function() {
+      path <- cur_photo()
+      sig <- tryCatch(readBin(path, "raw", n = 8L), error = function(e) raw(0))
+      plain <- (length(sig) >= 2 && sig[1] == as.raw(0xFF) && sig[2] == as.raw(0xD8)) ||
+        (length(sig) >= 8 &&
+           all(sig[1:8] == as.raw(c(0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A))))
+      if (plain && identical(rv$flip, "none") && identical(rv$dispflip, "none"))
+        return(path)
+      a <- flip_arr(flip_arr(rv$arr, rv$flip), rv$dispflip)
+      a[!is.finite(a)] <- 0; a[] <- pmin(pmax(a, 0), 1)
+      if (length(dim(a)) == 3L && dim(a)[3] == 4L) a <- a[, , 1:3, drop = FALSE]
+      if (requireNamespace("png", quietly = TRUE)) {
+        tf <- tempfile(fileext = ".png"); png::writePNG(a, tf)
+      } else {
+        if (length(dim(a)) == 2L) a <- array(a, c(dim(a), 3L))
+        tf <- tempfile(fileext = ".jpg"); jpeg::writeJPEG(a, tf, quality = 0.97)
+      }
+      tf
+    }
+    shiny::observeEvent(input$predict, run_prediction(auto = FALSE))
+    shiny::observeEvent(input$predict_auto, run_prediction(auto = TRUE))
+    # auto = TRUE: no click needed -- LM1, LM2 (and the dorsal side) come from
+    # the global network; those the operator already placed are kept and passed
+    # to the worker, which gives them precedence. LM1/LM2 found automatically are
+    # journaled "predicted" (unchecked) until clicked again.
+    run_prediction <- function(auto = FALSE) {
+      if (is.null(rv$img)) return()
+      if (!auto && (is.null(rv$A) || is.null(rv$B))) {
+        shiny::showNotification("Place the snout (1) and the caudal base (2) first (or use 'Auto').",
+                                type = "error"); return() }
+      P <- if (!is.null(rv$A) && !is.null(rv$B)) tryCatch(recon(), error = function(e) NULL)
+           else matrix(NA_real_, 19L, 2L)
+      if (is.null(P)) return()
+      img <- worker_image()
+      M <- shiny::withProgress(
+             message = if (auto) "automatic landmarking..." else "ml-morph prediction...", value = 0.5,
+             .fm_mlmorph_predict(mlm, input$mlm_model, img, P, auto = auto))
+      if (!identical(img, cur_photo())) unlink(img)
+      if (is.character(M)) {
+        shiny::showNotification(M, type = "error", duration = 12); return() }
+      if (auto) {
+        auto12 <- integer(0)
+        if (is.null(rv$A) && all(is.finite(M["1", ]))) { rv$A <- unname(M["1", ]); auto12 <- c(auto12, 1L) }
+        if (is.null(rv$B) && all(is.finite(M["2", ]))) { rv$B <- unname(M["2", ]); auto12 <- c(auto12, 2L) }
+        if (is.null(rv$A) || is.null(rv$B)) {
+          shiny::showNotification("Auto mode: snout or caudal base not found.", type = "error"); return() }
+        rv$predicted <- union(rv$predicted, auto12)
+      }
+      # a click is a measurement and an NA a statement: neither is overwritten
+      tgt <- setdiff(3:19, union(rv$edited, rv$na))
+      tgt <- tgt[is.finite(M[as.character(tgt), 1])]
+      ov <- rv$override
+      for (i in tgt) { k <- as.character(i); ov[[k]] <- NULL; ov[[k]] <- unname(M[k, ]) }
+      # hinges 22/24 placed by the model (curved fish): the broken axis then
+      # follows the body; a hinge placed by hand is kept
+      hg <- attr(M, "hinges")
+      if (!is.null(hg)) for (k in rownames(hg)) {
+        if (as.integer(k) %in% rv$edited) next
+        ov[[k]] <- NULL; ov[[k]] <- unname(hg[k, ])
+        tgt <- c(tgt, as.integer(k))
+      }
+      rv$override <- ov
+      rv$predicted <- union(rv$predicted, tgt)
+      rv$adjusted  <- setdiff(rv$adjusted, tgt)
+      # straight on to the scale bar ("new" queue), with the whole photograph in
+      # view; otherwise point 3, the first anatomical point to review
+      todo <- if (is_new())
+        .FM_SCALE_PTS[!as.character(.FM_SCALE_PTS) %in% names(rv$override)] else integer(0)
+      if (length(todo)) {
+        rv$sel <- todo[1]; rv$zoom <- 1; rv$cx <- NULL; rv$cy <- NULL
+      } else rv$sel <- 3L
+      shiny::showNotification(sprintf("%d points predicted%s.", length(tgt) + if (auto) length(auto12) else 0L,
+        if (length(todo)) sprintf(" -- click LM%d on the ruler, then review", todo[1])
+        else " -- review them"), type = "message")
+    }
 
     # --- zoom ---
     shiny::observeEvent(input$zoom_in,  { rv$zoom <- min(rv$zoom * 1.5, 12); zoom_to_sel() })
@@ -3161,6 +3308,11 @@ launch_fishmorph_digitizer <- function(
         # survive into the journal (quality control after the fact).
         else if (p %in% rv$adjusted) "adjusted"
         else if (p %in% rv$edited) "placed"
+        # predicted BEFORE derived, unless the constrained editing re-derives
+        # the point (8, 9, 11, 13, 14) from its drivers, in which case it is
+        # what it says: computed.
+        else if (p %in% rv$predicted &&
+                 !(isTRUE(input$correct) && p %in% .FM_DERIVED)) "predicted"
         else if (p %in% .FM_DERIVED) "derived"
         else if (p %in% c(1L, 2L) || as.character(p) %in% ov) "placed"
         else "seeded"

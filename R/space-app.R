@@ -31,8 +31,11 @@
 #' Launches the 'shiny' application that explores the global morphological space
 #' of freshwater fishes from the FISHMORPH database (Brosse et al. 2021):
 #' principal component analysis of the nine dimensionless traits, density of the
-#' functional space, colouring by order or by IUCN status, and projection of a
-#' user-supplied set of species.
+#' functional space, colouring by order or by IUCN status, projection of a
+#' user-supplied set of species, and a "Species finder" tab -- an interactive,
+#' filterable table of the whole data set with a name search (exact, close
+#' spelling, genus only, absent) that places the species found in the space.
+#' The search engine is [find_fishmorph_species()], usable from the console.
 #'
 #' @param data Path to a trait CSV (semicolon-separated) replacing the bundled
 #'   data set. Useful to work on a more recent version, or on the result of
@@ -47,7 +50,8 @@
 #'   function is used as given.
 #' @param ... Passed to [shiny::runApp()] (for example `port`).
 #' @return Invisibly `NULL`; called for its side effect.
-#' @seealso [launch_fishmorph_digitizer()] to produce the landmarks,
+#' @seealso [find_fishmorph_species()] for the same species search from the
+#'   console, [launch_fishmorph_digitizer()] to produce the landmarks,
 #'   [set_fishmorph_source()],
 #'   [project_fishmorph()] to project specimens by computation rather than
 #'   interactively.

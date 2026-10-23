@@ -66,8 +66,9 @@ test_that("'adjusted' survives the round trip through the database", {
   # which is the same drift one level higher.
   qc <- DBI::dbGetQuery(con, "SELECT * FROM v_specimen_qc")
   expect_true("n_adjusted" %in% names(qc))
+  expect_true("n_predicted" %in% names(qc))
   expect_equal(qc$n_placed + qc$n_seeded + qc$n_adjusted + qc$n_derived +
-                 qc$n_na, 25)
+                 qc$n_predicted + qc$n_na, 25)
 })
 
 test_that("a status outside the vocabulary is degraded, not fatal", {

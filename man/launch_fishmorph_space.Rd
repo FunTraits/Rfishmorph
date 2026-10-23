@@ -30,8 +30,11 @@ Invisibly \code{NULL}; called for its side effect.
 Launches the 'shiny' application that explores the global morphological space
 of freshwater fishes from the FISHMORPH database (Brosse et al. 2021):
 principal component analysis of the nine dimensionless traits, density of the
-functional space, colouring by order or by IUCN status, and projection of a
-user-supplied set of species.
+functional space, colouring by order or by IUCN status, projection of a
+user-supplied set of species, and a "Species finder" tab -- an interactive,
+filterable table of the whole data set with a name search (exact, close
+spelling, genus only, absent) that places the species found in the space.
+The search engine is \code{\link[=find_fishmorph_species]{find_fishmorph_species()}}, usable from the console.
 }
 \examples{
 \dontrun{
@@ -41,7 +44,8 @@ launch_fishmorph_space(data = "my_traits.csv")
 }
 }
 \seealso{
-\code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} to produce the landmarks,
+\code{\link[=find_fishmorph_species]{find_fishmorph_species()}} for the same species search from the
+console, \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} to produce the landmarks,
 \code{\link[=set_fishmorph_source]{set_fishmorph_source()}},
 \code{\link[=project_fishmorph]{project_fishmorph()}} to project specimens by computation rather than
 interactively.

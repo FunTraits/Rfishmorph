@@ -155,6 +155,51 @@ compute_fd <- function(sc2d) {
   }, error = function(e) list(FRic = NA, FDis = NA, n = n, hull_pts = NULL))
 }
 
+# ─── Species finder ──────────────────────────────────────────────────────────
+#
+# La logique de recherche vit dans le package (find_fishmorph_species()) et non
+# ici : l'onglet repond exactement ce que repond la console, et c'est ce que
+# verrouillent les tests. Lancee hors package (runApp() direct sans Rfishmorph
+# installe), l'app demarre quand meme ; seul l'onglet signale l'absence.
+
+.fms_lookup <- if (requireNamespace("Rfishmorph", quietly = TRUE) &&
+                   exists("find_fishmorph_species",
+                          envir = asNamespace("Rfishmorph"), inherits = FALSE))
+  get("find_fishmorph_species", envir = asNamespace("Rfishmorph")) else NULL
+
+SF_STATUS_LEVELS <- c("exact", "close", "genus_only", "absent", "invalid")
+SF_STATUS_COLS   <- c("#C8E6C9", "#FFF59D", "#FFE0B2", "#FFCDD2", "#E0E0E0")
+
+# Colonnes descriptives du tableau parcourable ; les colonnes propres a la
+# table landmarks (store, n_imputed, size_source) sont ajoutees si presentes.
+SF_META_COLS  <- c("Species", "Genus", "Family", "Order", "IUCN")
+SF_EXTRA_COLS <- intersect(c("store", "n_imputed", "size_source"), names(FISH))
+SF_FACTORS    <- c("Genus", "Family", "Order", "IUCN", "In_space", "store",
+                   "size_source")
+
+# Une liste collee depuis Excel arrive une espece par ligne ; on coupe aussi sur
+# ";" et tabulation, mais PAS sur la virgule, qui separe l'autorite de l'annee
+# ("Salmo trutta Linnaeus, 1758").
+.fms_split_names <- function(txt) {
+  if (is.null(txt) || !nzchar(txt)) return(character(0))
+  x <- trimws(unlist(strsplit(txt, "[\r\n;\t]+")))
+  x[nzchar(x)]
+}
+
+.fms_read_name_file <- function(path) {
+  df <- tryCatch(read.csv(path, stringsAsFactors = FALSE, check.names = FALSE),
+                 error = function(e) NULL)
+  if (!is.null(df) && ncol(df) == 1L && grepl(";", names(df)[1], fixed = TRUE))
+    df <- NULL                          # en-tete separe par ";" : relire en csv2
+  if (is.null(df))
+    df <- tryCatch(read.csv2(path, stringsAsFactors = FALSE,
+                             check.names = FALSE), error = function(e) NULL)
+  if (is.null(df) || !ncol(df)) return(character(0))
+  col <- if ("Species" %in% names(df)) "Species" else names(df)[1]
+  x <- trimws(as.character(df[[col]]))
+  x[!is.na(x) & nzchar(x)]
+}
+
 # ─── UI ──────────────────────────────────────────────────────────────────────
 
 ui <- page_navbar(
@@ -234,6 +279,57 @@ ui <- page_navbar(
       card(
         card_header("Trait loadings (PC1–4)"),
         plotOutput("loadings_plot", height = "210px")
+      )
+    )
+  ),
+
+  # ── Tab 1b: Species finder ──────────────────────────────────────────────────
+  nav_panel("🔎 Species finder",
+    layout_sidebar(
+      sidebar = sidebar(width = 300, bg = "#F5F7FA",
+
+        h6("Is my species in FISHMORPH?", class = "text-primary fw-bold"),
+        textAreaInput("sf_query", NULL, rows = 7, resize = "vertical",
+          placeholder = "One name per line (or separated by ;)\nSalmo trutta\nGobio occitaniae\nBarbus sp."),
+        fileInput("sf_file", "…or a list of names (CSV / TXT)",
+                  accept = c(".csv", ".txt"), placeholder = "Species column or 1st column"),
+        sliderInput("sf_maxdist", "Spelling tolerance (edit distance)",
+                    min = 0, max = 5, value = 2, step = 1),
+        actionButton("sf_go", "Search", icon = icon("magnifying-glass"),
+                     class = "btn-primary w-100"),
+        helpText("Underscores, case, authorities (\"Linnaeus, 1758\"), cf./aff. ",
+                 "and subspecies are ignored. 'close' = a name within the ",
+                 "tolerance: a candidate to check, not a correction."),
+
+        hr(),
+        h6("Browse the table", class = "text-primary fw-bold"),
+        checkboxInput("sf_only_found", "Only species found by the search", FALSE),
+        checkboxInput("sf_show_traits", "Show trait values", TRUE),
+        helpText("Type in the search box or in the column filters; ",
+                 "click rows to place them in the space below."),
+
+        hr(),
+        downloadButton("dl_sf_results", "Search results (CSV)",
+                       class = "btn-sm btn-outline-primary w-100 mb-1"),
+        downloadButton("dl_sf_table", "Filtered table (CSV)",
+                       class = "btn-sm btn-outline-secondary w-100")
+      ),
+
+      card(
+        card_header("Search results"),
+        uiOutput("sf_summary"),
+        DTOutput("sf_results")
+      ),
+      card(
+        card_header("FISHMORPH table — browse, filter, select"),
+        DTOutput("sf_table")
+      ),
+      card(
+        card_header("Position in the global morphological space"),
+        plotOutput("sf_space", height = "460px"),
+        card_footer(helpText(
+          "Traits and axes as set in the 'Explore global space' tab. ",
+          "Red: species found by the search and rows selected in the table."))
       )
     )
   ),
@@ -812,6 +908,155 @@ server <- function(input, output, session) {
   output$dl_explore <- downloadHandler(
     filename = "FishMorphSpace_explore.pdf",
     content  = function(f) ggsave(f, explore_ggplot_pdf(), width = 9, height = 8, device = "pdf"))
+
+  # ── Species finder tab ─────────────────────────────────────────────────────
+  # La recherche ne part qu'au clic : la tolerance et la liste sont lues a ce
+  # moment-la, pas a chaque frappe (adist sur ~9 000 noms par requete).
+  sf_results <- eventReactive(input$sf_go, {
+    validate(need(!is.null(.fms_lookup),
+      "Species search needs the Rfishmorph package (>= 0.14.0) to be installed."))
+    q <- .fms_split_names(input$sf_query)
+    if (!is.null(input$sf_file))
+      q <- c(q, .fms_read_name_file(input$sf_file$datapath))
+    q <- unique(q)
+    validate(need(length(q) > 0, "Type at least one name, then click Search."))
+    .fms_lookup(q, reference = FISH, max_distance = input$sf_maxdist)
+  })
+
+  output$sf_summary <- renderUI({
+    if (!input$sf_go) return(helpText(
+      "Type or upload names, then click Search. The table below can be browsed directly."))
+    r  <- sf_results()
+    nb <- table(factor(r$status, levels = SF_STATUS_LEVELS))
+    lab <- c(exact = "exact", close = "close spelling", genus_only = "genus only",
+             absent = "absent", invalid = "invalid")
+    tags$div(class = "mb-2",
+      tags$small(sprintf("%d name(s) searched: ", nrow(r))),
+      lapply(SF_STATUS_LEVELS[nb > 0], function(s)
+        tags$span(class = "badge me-1",
+                  style = sprintf("background:%s;color:#212121;",
+                                  SF_STATUS_COLS[match(s, SF_STATUS_LEVELS)]),
+                  sprintf("%s: %d", lab[[s]], nb[[s]]))))
+  })
+
+  output$sf_results <- renderDT({
+    r <- sf_results()
+    r$complete_traits <- ifelse(is.na(r$complete_traits), "",
+                                ifelse(r$complete_traits, "yes", "no"))
+    show <- r[, c("query", "status", "match", "distance", "Family", "Order",
+                  "IUCN", "complete_traits", "n_genus", "suggestions")]
+    datatable(show, rownames = FALSE, selection = "single",
+      colnames = c("Query", "Status", "FISHMORPH name", "Edit dist.", "Family",
+                   "Order", "IUCN", "In space", "Species in genus",
+                   "Nearest names [edit distance]"),
+      options = list(pageLength = 10, scrollX = TRUE, dom = "tip")) %>%
+      formatStyle("status", backgroundColor =
+                    styleEqual(SF_STATUS_LEVELS, SF_STATUS_COLS))
+  })
+
+  # Noms (et genres) retenus par la recherche -- servent au filtre du tableau
+  # et au trace.
+  sf_found <- reactive({
+    if (!input$sf_go) return(list(species = character(0), genera = character(0)))
+    r <- sf_results()
+    list(species = unique(r$match[r$status %in% c("exact", "close")]),
+         genera  = unique(sub(" .*$", "",
+                              r$query_clean[r$status == "genus_only"])))
+  })
+
+  sf_table_df <- reactive({
+    cols <- c(intersect(SF_META_COLS, names(FISH)), SF_EXTRA_COLS)
+    df <- FISH[, cols, drop = FALSE]
+    df$In_space <- ifelse(complete.cases(FISH[, TRAIT_COLS]), "yes", "no")
+    if (isTRUE(input$sf_show_traits))
+      df <- cbind(df, round(FISH[, intersect(c(TRAIT_COLS, "MBl", "MBw"),
+                                             names(FISH)), drop = FALSE], 3))
+    if (isTRUE(input$sf_only_found)) {
+      f <- sf_found()
+      gen <- sub(" .*$", "", FISH$Species)
+      df <- df[FISH$Species %in% f$species | gen %in% f$genera, , drop = FALSE]
+    }
+    for (cl in intersect(SF_FACTORS, names(df))) df[[cl]] <- factor(df[[cl]])
+    df
+  })
+
+  output$sf_table <- renderDT({
+    datatable(sf_table_df(), rownames = FALSE, filter = "top",
+      selection = "multiple",
+      options = list(pageLength = 15, scrollX = TRUE,
+                     search = list(caseInsensitive = TRUE),
+                     columnDefs = list(list(className = "dt-left", targets = 0))))
+  }, server = TRUE)
+
+  sf_proxy <- dataTableProxy("sf_table")
+  # Un clic sur un resultat filtre le grand tableau sur ce nom (ou ce genre).
+  observeEvent(input$sf_results_rows_selected, {
+    r <- sf_results()[input$sf_results_rows_selected, ]
+    kw <- if (!is.na(r$match)) r$match else
+          if (r$status == "genus_only") sub(" .*$", "", r$query_clean) else r$query_clean
+    updateSearch(sf_proxy, keywords = list(global = kw))
+  })
+
+  sf_space_plot <- reactive({
+    sc  <- global_scores_df()
+    pcx <- paste0("PC", input$pc_x)
+    pcy <- paste0("PC", input$pc_y)
+    validate(need(pcx %in% names(sc) && pcy %in% names(sc), "Axis out of range."))
+    kde <- kde_global()
+    pr  <- global_pca()
+    var_exp <- summary(pr$pca)$importance[2, ] * 100
+
+    tab <- sf_table_df()
+    sel <- tab$Species[input$sf_table_rows_selected]
+    hl  <- unique(c(sf_found()$species, as.character(sel)))
+    pts <- sc[sc$Species %in% hl, c("Species", pcx, pcy)]
+    names(pts)[2:3] <- c("PC1", "PC2")
+    missing <- setdiff(hl, pts$Species)
+
+    pal <- FUNSPACE_PAL(length(kde$quant_breaks) - 1)
+    g <- ggplot() +
+      coord_fixed(xlim = kde$rng_x, ylim = kde$rng_y, expand = FALSE) +
+      geom_contour_filled(data = kde$df, aes(x = PC1, y = PC2, z = z_clip),
+                          breaks = kde$quant_breaks) +
+      scale_fill_manual(values = pal, na.value = "transparent", guide = "none") +
+      geom_contour(data = kde$df, aes(x = PC1, y = PC2, z = z),
+                   breaks = kde$thr99, colour = "grey30", linewidth = 1) +
+      geom_hline(yintercept = 0, linetype = "dashed", colour = "grey65", linewidth = 0.3) +
+      geom_vline(xintercept = 0, linetype = "dashed", colour = "grey65", linewidth = 0.3) +
+      labs(x = sprintf("PC%d (%.2f%%)", input$pc_x, var_exp[input$pc_x]),
+           y = sprintf("PC%d (%.2f%%)", input$pc_y, var_exp[input$pc_y]),
+           title = if (nrow(pts)) sprintf("%d species placed", nrow(pts)) else
+             "Search or select species to place them",
+           caption = if (length(missing))
+             paste0("Not placed (incomplete traits): ",
+                    paste(utils::head(missing, 8), collapse = ", "),
+                    if (length(missing) > 8) ", ..." else "") else NULL) +
+      theme_classic(base_size = 12) +
+      theme(panel.border = element_rect(fill = NA, colour = "black"),
+            axis.line = element_blank(),
+            plot.title = element_text(face = "bold"))
+    if (nrow(pts)) {
+      g <- g + geom_point(data = pts, aes(x = PC1, y = PC2), shape = 21,
+                          fill = "#C62828", colour = "white", size = 3, stroke = 0.6)
+      if (nrow(pts) <= 40)
+        g <- g + geom_text_repel(data = pts, aes(x = PC1, y = PC2, label = Species),
+                                 size = 3, fontface = "italic", max.overlaps = 40)
+    }
+    g
+  })
+  output$sf_space <- renderPlot({ sf_space_plot() }, res = 110)
+
+  output$dl_sf_results <- downloadHandler(
+    filename = "FishMorphSpace_species_search.csv",
+    content  = function(f) write.csv(sf_results(), f, row.names = FALSE))
+  output$dl_sf_table <- downloadHandler(
+    filename = "FishMorphSpace_species_table.csv",
+    content  = function(f) {
+      df   <- sf_table_df()
+      rows <- input$sf_table_rows_all
+      if (!is.null(rows)) df <- df[rows, , drop = FALSE]
+      write.csv(df, f, row.names = FALSE)
+    })
 
   # ── Project tab ────────────────────────────────────────────────────────────
   user_data <- reactive({

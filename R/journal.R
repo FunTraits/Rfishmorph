@@ -67,7 +67,7 @@
                    # the statement has to be written down as such
   "landmark",      # point number
   "x", "y",        # coordinates in image pixels (Y downwards)
-  "status"         # placed | seeded | adjusted | derived | na  (see below)
+  "status"         # placed | seeded | adjusted | derived | predicted | na
 )
 
 # Meaning of `status` -- this is the information the wide workbook layout cannot
@@ -78,8 +78,11 @@
 #             operator's request (3/4 brought back to the maximum body depth):
 #             neither pointed at by hand, nor a plain seed
 #   derived : point computed automatically (8, 9, 11, 15, 23)
+#   predicted: point written by the ml-morph shape predictor ("Predict 19
+#             landmarks") and not clicked since -- a model output, to be audited
+#             like a seed, but one that has looked at the specimen
 #   na      : point explicitly marked NON-MEASURABLE
-.FM_JOURNAL_STATUS <- c("placed", "seeded", "adjusted", "derived", "na")
+.FM_JOURNAL_STATUS <- c("placed", "seeded", "adjusted", "derived", "predicted", "na")
 
 
 # --- utilities ---------------------------------------------------------------
@@ -395,6 +398,7 @@ fm_journal_history <- function(journal_dir, row_key = NULL) {
     photo_file = g$photo_file[1], n_points = nrow(g),
     n_placed = sum(g$status == "placed"), n_seeded = sum(g$status == "seeded"),
     n_adjusted = sum(g$status == "adjusted"),
+    n_predicted = sum(g$status == "predicted"),
     n_na = sum(g$status == "na"), stringsAsFactors = FALSE)))
   agg <- agg[order(agg$row_key, agg$timestamp, agg$record_id), ]
   rownames(agg) <- NULL
