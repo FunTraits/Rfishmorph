@@ -207,8 +207,8 @@ ui <- page_navbar(
   theme  = bs_theme(
     bootswatch   = "flatly",
     primary      = "#1565C0",
-    base_font    = font_google("Source Sans Pro"),
-    heading_font = font_google("Merriweather"),
+    base_font    = bslib::font_collection("Source Sans Pro", "system-ui", "-apple-system", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"),
+    heading_font = bslib::font_collection("Merriweather", "Georgia", "Times New Roman", "serif"),
     `navbar-bg`  = "#1565C0"
   ),
   bg = "#1565C0", inverse = TRUE,

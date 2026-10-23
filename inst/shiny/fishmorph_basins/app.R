@@ -415,12 +415,10 @@ INDEX_COLS <- c("FRic", "FDiv", "FDis", "FEve", "Rao")
 IUCN_COLS <- c(LC = "#60B347", NT = "#CCE226", VU = "#F9A825", EN = "#E65100",
                CR = "#B71C1C", EW = "#7B1FA2", EX = "#212121", DD = "#9E9E9E")
 
-THEME <- bslib::bs_theme(version = 5, primary = "#0f766e",
-                         base_font = bslib::font_google("Inter"),
-                         heading_font = bslib::font_google("Inter"))
+THEME <- Rfishmorph::app_theme()   # the common look (R/app-theme.R)
 
 card_x <- function(title, ...) card(card_header(title), card_body(..., gap = "8px"))
-hint <- function(...) tags$p(style = "color:#6b7280;font-size:12px;margin:2px 0;", ...)
+hint <- function(...) tags$p(style = "color:var(--fm-muted);font-size:12px;margin:2px 0;", ...)
 # An axis label carries the variance ITS OWN campaign explains. "PC1 (34 %)" is
 # not a property of the number 1: the two campaigns are ordinated separately, so
 # the same axis name covers two different axes and two different shares.
@@ -2367,9 +2365,9 @@ server <- function(input, output, session) {
     n <- nrow(CMP$ratios)
     box <- function(lab, val, sub = NULL) tags$div(
       class = "border rounded p-2 me-3", style = "min-width:190px;",
-      tags$div(style = "font-size:12px;color:#6b7280;", lab),
+      tags$div(style = "font-size:12px;color:var(--fm-muted);", lab),
       tags$div(style = "font-size:22px;font-weight:600;", val),
-      if (!is.null(sub)) tags$div(style = "font-size:11px;color:#6b7280;", sub))
+      if (!is.null(sub)) tags$div(style = "font-size:11px;color:var(--fm-muted);", sub))
     tagList(
       div(class = "d-flex flex-wrap",
           box("Especes mesurees deux fois", n),

@@ -1,7 +1,7 @@
 Package: Rfishmorph
 Type: Package
 Title: The FISHMORPH Reference Database and the Visualisation of Its Functional Space
-Version: 0.18.0
+Version: 0.19.0
 Authors@R: c(
     person("Aurele", "Toussaint", email = "aurele.toussaint@cnrs.fr",
            role = c("aut", "cre"), comment = c(affiliation = "CNRS")))
@@ -49,6 +49,7 @@ Suggests:
     DBI,
     duckdb,
     arrow,
+    base64enc,
     bslib,
     DT,
     plotly,

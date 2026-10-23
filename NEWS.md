@@ -1,3 +1,25 @@
+# Rfishmorph 0.19.0
+
+* `app_theme()` : un tableau DT place dans une carte recevait une hauteur FIXE
+  (400 px) et, avec plus de lignes, debordait sur ce qui le suivait (le
+  graphique d'avancement du hub, par exemple). Les tableaux prennent
+  desormais leur hauteur naturelle, dans toutes les applications du theme.
+* NOUVEAU `app_theme(primary = )` : le theme commun des applications Shiny de
+  Rfishmorph, intraitR et FishInTrait, defini une seule fois ici. Couleurs
+  d'une riviere (eau courante `#1d5e6b` pour l'accent, fond « hauts-fonds »,
+  texte « lit de riviere ») et un ocre de gravier pour le focus clavier,
+  l'onglet actif et une ligne de landmarks pointillee sous l'en-tete. Police
+  IBM Plex Sans (chiffres tabulaires), titres en Plex Sans Condensed, vraie
+  italique pour les especes ; fichiers EMBARQUES (`inst/fonts`, licence OFL,
+  220 Ko) : aucune connexion necessaire. Cartes a filet sans ombre, focus
+  visible, pagination et notifications harmonisees. Variables CSS
+  `--fm-ink`, `--fm-muted`, `--fm-line`, `--fm-wash`, `--fm-gravel`. L'app
+  *basins* l'utilise ; *FishMorphSpace* garde son style (application publiee).
+  base64enc en Suggests.
+* Apps space et basins : polices locales (`bslib::font_collection()`) au lieu
+  de `font_google()`, qui telechargeait au demarrage et empechait l'app de
+  s'ouvrir hors ligne ou derriere un proxy.
+
 # Rfishmorph 0.18.0
 
 ## Rfishmorph ne mesure plus
