@@ -82,7 +82,8 @@
 #             landmarks") and not clicked since -- a model output, to be audited
 #             like a seed, but one that has looked at the specimen
 #   na      : point explicitly marked NON-MEASURABLE
-.FM_JOURNAL_STATUS <- c("placed", "seeded", "adjusted", "derived", "predicted", "na")
+.FM_JOURNAL_STATUS <- c("placed", "seeded", "adjusted", "derived", "predicted",
+                        "validated", "na")
 
 
 # --- utilities ---------------------------------------------------------------
@@ -399,6 +400,7 @@ fm_journal_history <- function(journal_dir, row_key = NULL) {
     n_placed = sum(g$status == "placed"), n_seeded = sum(g$status == "seeded"),
     n_adjusted = sum(g$status == "adjusted"),
     n_predicted = sum(g$status == "predicted"),
+    n_validated = sum(g$status == "validated"),
     n_na = sum(g$status == "na"), stringsAsFactors = FALSE)))
   agg <- agg[order(agg$row_key, agg$timestamp, agg$record_id), ]
   rownames(agg) <- NULL

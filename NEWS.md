@@ -13,6 +13,13 @@
 * Charnieres 22 et 24 : un modele entraine avec elles (`cnn` a 21 sorties)
   les place a la prediction (statut "predicted") ; une charniere placee a la
   main est conservee.
+* Statut **"validated"** et bouton **« Validate points »** dans le digitizer :
+  points predits ou semes regardes et acceptes sans etre deplaces ; compteur
+  `n_validated` dans `fm_journal_history()` et la vue `v_specimen_qc`.
+* Echelle automatique : sans clic sur la regle, la prediction place 20-21 sur
+  la regle (statut "predicted", notification a verifier).
+* Case **« Hinges 22/24 (curved fish) »** dans le digitizer (decochee par
+  defaut) : la prediction place aussi les charnieres 22/24.
 * `fm_mlmorph_resources()` renvoie `global` (chemin du reseau global) ; le
   dossier `mlmorph_run_global` n'est jamais propose comme modele de points.
 

@@ -157,13 +157,15 @@ fm_mlmorph_resources <- function(mlmorph_dir = NULL, predictor = NULL,
 # `global`: path of the global network -> fully automatic mode (--auto): LM1,
 # LM2 and the dorsal side are found on the whole photograph; a point already
 # placed (1, 2, 3) is still passed and takes precedence over the detection.
-.fm_mlmorph_args <- function(worker, image, P, predictor, dataset, out, global = NA) {
+.fm_mlmorph_args <- function(worker, image, P, predictor, dataset, out, global = NA,
+                             hinges = FALSE) {
   fin <- function(i) !is.null(P) && i <= nrow(P) && all(is.finite(P[i, ]))
   auto <- !is.na(global)
   if (!auto && (!fin(1L) || !fin(2L))) stop("LM1 and LM2 must be placed first.", call. = FALSE)
   xy <- function(i) sprintf("%.3f,%.3f", P[i, 1], P[i, 2])
   c(shQuote(worker), "--image", shQuote(image),
     if (auto) c("--auto", "--global-model", shQuote(global)),
+    if (isTRUE(hinges)) "--hinges",
     if (fin(1L)) c("--snout", xy(1L)), if (fin(2L)) c("--caudal", xy(2L)),
     if (fin(3L)) c("--dorsal", xy(3L)),
     "--no-pin-clicks",
@@ -174,7 +176,7 @@ fm_mlmorph_resources <- function(mlmorph_dir = NULL, predictor = NULL,
 # Runs the worker. Returns a 19 x 2 matrix (rows "1".."19", image pixels), or
 # a character string carrying the error when the prediction failed -- the app
 # reports it instead of stopping.
-.fm_mlmorph_predict <- function(res, model, image, P, auto = FALSE) {
+.fm_mlmorph_predict <- function(res, model, image, P, auto = FALSE, hinges = FALSE) {
   if (is.na(res$python) || is.na(res$worker))
     return("No Python interpreter or worker script found (see ?fm_mlmorph_resources).")
   m <- res$models[res$models$name == model | res$models$predictor == model, , drop = FALSE]
@@ -184,7 +186,8 @@ fm_mlmorph_resources <- function(mlmorph_dir = NULL, predictor = NULL,
   out <- tempfile(fileext = ".csv"); on.exit(unlink(out), add = TRUE)
   args <- tryCatch(.fm_mlmorph_args(res$worker, image, P, m$predictor[1],
                                     m$dataset[1], out,
-                                    global = if (auto) res$global else NA),
+                                    global = if (auto) res$global else NA,
+                                    hinges = hinges),
                    error = function(e) conditionMessage(e))
   if (length(args) == 1L) return(args)
   log <- tryCatch(suppressWarnings(system2(res$python, args, stdout = TRUE, stderr = TRUE)),
@@ -204,10 +207,17 @@ fm_mlmorph_resources <- function(mlmorph_dir = NULL, predictor = NULL,
   # hinges 22/24 of the broken axis, when the model places them
   # (train_cnn.py --hinges): returned as the attribute "hinges"
   h <- d[d$landmark %in% c(22L, 24L) & is.finite(d$X) & is.finite(d$Y), , drop = FALSE]
+  # scale bar found automatically on the ruler (mlmorph_run_ruler + ruler_scale.py)
+  sc <- d[d$landmark %in% c(20L, 21L) & is.finite(d$X) & is.finite(d$Y), , drop = FALSE]
   d <- d[d$landmark >= 1 & d$landmark <= 19, , drop = FALSE]
   M <- matrix(NA_real_, 19L, 2L, dimnames = list(as.character(1:19), c("X", "Y")))
   M[as.character(d$landmark), ] <- as.matrix(d[, c("X", "Y")])
   if (nrow(h)) attr(M, "hinges") <- matrix(as.matrix(h[, c("X", "Y")]), ncol = 2L,
                                            dimnames = list(as.character(h$landmark), c("X", "Y")))
+  if (nrow(sc) == 2L) {
+    attr(M, "scale") <- matrix(as.matrix(sc[, c("X", "Y")]), ncol = 2L,
+                               dimnames = list(as.character(sc$landmark), c("X", "Y")))
+    attr(M, "scale_msg") <- sub("^SCALE: ", "", grep("^SCALE:", log, value = TRUE)[1])
+  }
   M
 }

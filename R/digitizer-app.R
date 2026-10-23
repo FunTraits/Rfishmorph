@@ -2039,6 +2039,14 @@ launch_fishmorph_digitizer <- function(
       else shiny::tags$button(type = "button", class = "btn btn-default",
                               disabled = "disabled", title = "No ml-morph model found",
                               "Predict 19 landmarks"),
+      shiny::tags$span(style = "display:inline-block;vertical-align:middle;margin:0 6px;",
+        title = paste("Also place the hinges 22/24 of the broken axis (curved fish). Off by",
+                      "default: predicted hinges are reliable only where hinges were clicked",
+                      "for training. Check them before saving."),
+        shiny::checkboxInput("pred_hinges", "Hinges 22/24 (curved fish)", FALSE, width = "auto")),
+      shiny::actionButton("validate_pts", "Validate points",
+        title = paste("Mark every point still 'predicted' or 'seeded' as checked and",
+                      "accepted (status 'validated'). Use it only after looking at each point.")),
       # fully automatic mode: needs the global network (mlmorph_run_global)
       if (nrow(mlm$models) && !is.null(mlm$global) && !is.na(mlm$global))
         shiny::actionButton("predict_auto", "Auto (no clicks)",
@@ -2222,6 +2230,8 @@ launch_fishmorph_digitizer <- function(
                              # (as opposed to points merely loaded from the workbook)
       adjusted = integer(0), # points snapped by the extreme-point convention
                              # (status "adjusted" in the journal)
+      validated = integer(0), # predicted/seeded points the operator looked at and
+                              # accepted ("Validate points"; status "validated")
       predicted = integer(0), # points written by the ml-morph predictor and not
                              # touched since (status "predicted" in the journal)
       collapse = character(0))  # segments declared zero on THIS specimen
@@ -2506,6 +2516,7 @@ launch_fishmorph_digitizer <- function(
     load_species <- function() {
       rv$A <- NULL; rv$B <- NULL; rv$P <- NULL; rv$override <- list(); rv$na <- integer(0)
       rv$edited <- integer(0); rv$adjusted <- integer(0); rv$predicted <- integer(0)
+      rv$validated <- integer(0)
       # A declared zero is a statement about ONE species: it never carries over.
       rv$collapse <- character(0)
       shiny::updateCheckboxGroupInput(session, "collapse", selected = character(0))
@@ -2948,7 +2959,8 @@ launch_fishmorph_digitizer <- function(
     shiny::observeEvent(input$click, {
       if (is.null(rv$img)) return()
       pt <- c(input$click$x, input$click$y); s <- rv$sel
-      if (s %in% c(1L, 2L)) rv$predicted <- setdiff(rv$predicted, s)  # clicked -> a measurement
+      if (s %in% c(1L, 2L)) {                       # clicked -> a measurement
+        rv$predicted <- setdiff(rv$predicted, s); rv$validated <- setdiff(rv$validated, s) }
       if (s == 1L) rv$A <- pt
       else if (s == 2L) rv$B <- pt
       else {  # re-inserted at the end of the list: the last point moved drives its group
@@ -3002,6 +3014,17 @@ launch_fishmorph_digitizer <- function(
       tf
     }
     shiny::observeEvent(input$predict, run_prediction(auto = FALSE))
+    shiny::observeEvent(input$validate_pts, {
+      if (is.null(rv$img) || is.null(rv$A) || is.null(rv$B)) return()
+      pts <- c(1:19, 22L, 24L, 25L)
+      st <- point_status(pts)
+      tgt <- as.integer(names(st)[st %in% c("predicted", "seeded")])
+      if (!length(tgt)) {
+        shiny::showNotification("No predicted or seeded point to validate.", type = "message"); return() }
+      rv$validated <- union(rv$validated, tgt)
+      shiny::showNotification(sprintf("%d point(s) validated: %s.", length(tgt),
+                                      paste(sort(tgt), collapse = ", ")), type = "message")
+    })
     shiny::observeEvent(input$predict_auto, run_prediction(auto = TRUE))
     # auto = TRUE: no click needed -- LM1, LM2 (and the dorsal side) come from
     # the global network; those the operator already placed are kept and passed
@@ -3018,7 +3041,8 @@ launch_fishmorph_digitizer <- function(
       img <- worker_image()
       M <- shiny::withProgress(
              message = if (auto) "automatic landmarking..." else "ml-morph prediction...", value = 0.5,
-             .fm_mlmorph_predict(mlm, input$mlm_model, img, P, auto = auto))
+             .fm_mlmorph_predict(mlm, input$mlm_model, img, P, auto = auto,
+                                 hinges = isTRUE(input$pred_hinges)))
       if (!identical(img, cur_photo())) unlink(img)
       if (is.character(M)) {
         shiny::showNotification(M, type = "error", duration = 12); return() }
@@ -3035,6 +3059,15 @@ launch_fishmorph_digitizer <- function(
       tgt <- tgt[is.finite(M[as.character(tgt), 1])]
       ov <- rv$override
       for (i in tgt) { k <- as.character(i); ov[[k]] <- NULL; ov[[k]] <- unname(M[k, ]) }
+      # scale bar found on the ruler: only where 20/21 are not placed yet
+      scb <- attr(M, "scale")
+      if (!is.null(scb) && !any(c("20", "21") %in% names(ov))) {
+        for (k in rownames(scb)) ov[[k]] <- unname(scb[k, ])
+        tgt <- c(tgt, 20L, 21L)
+        shiny::showNotification(paste0("Scale bar placed automatically on the ruler -- check 20-21",
+          if (!is.na(attr(M, "scale_msg") %||% NA)) paste0(" [", attr(M, "scale_msg"), "]") else "", "."),
+          type = "warning", duration = 8)
+      }
       # hinges 22/24 placed by the model (curved fish): the broken axis then
       # follows the body; a hinge placed by hand is kept
       hg <- attr(M, "hinges")
@@ -3045,6 +3078,7 @@ launch_fishmorph_digitizer <- function(
       }
       rv$override <- ov
       rv$predicted <- union(rv$predicted, tgt)
+      rv$validated <- setdiff(rv$validated, tgt)   # rewritten -> no longer the validated one
       rv$adjusted  <- setdiff(rv$adjusted, tgt)
       # straight on to the scale bar ("new" queue), with the whole photograph in
       # view; otherwise point 3, the first anatomical point to review
@@ -3308,6 +3342,8 @@ launch_fishmorph_digitizer <- function(
         # survive into the journal (quality control after the fact).
         else if (p %in% rv$adjusted) "adjusted"
         else if (p %in% rv$edited) "placed"
+        # checked and accepted without moving it ("Validate points")
+        else if (p %in% rv$validated) "validated"
         # predicted BEFORE derived, unless the constrained editing re-derives
         # the point (8, 9, 11, 13, 14) from its drivers, in which case it is
         # what it says: computed.

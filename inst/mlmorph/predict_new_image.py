@@ -415,6 +415,84 @@ def refine_curved(img, P, ids, orient, cnn, TL, cw, ch, thr=1.5, n_iter=2):
     return P, np.asarray(conf, float), dev, True
 
 
+def find_ruler_model(predictor):
+    """mlmorph_run_ruler/model.onnx (train_ruler.py) à côté du dossier du modèle fin."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(predictor)))
+    p = os.path.join(root, "mlmorph_run_ruler", "model.onnx")
+    return p if os.path.exists(p) else ""
+
+
+def auto_scale(img, ruler_model_path, ruler_mm=10.0, min_snr=10.0, period_model=None):
+    """Échelle sans clic : le réseau `ruler` localise deux graduations (approximatives),
+    ruler_scale.py mesure la période des graduations millimétriques. Rend
+    dict(p20, p21, mm_per_px, snr) ou None (pas de règle lisible : snr < min_snr)."""
+    import ruler_scale as RS
+    R = GlobalModel(ruler_model_path) if isinstance(ruler_model_path, str) else ruler_model_path
+    P, _ = R.run(img)
+    # Les deux points n'ont pas d'identité (graduations quelconques) : leurs cartes
+    # de probabilité s'étalent LE LONG de la règle. La droite de la règle est donc
+    # l'axe principal de la masse des deux cartes (position et direction fiables) ;
+    # la distance entre les deux points ne donne qu'un ordre de grandeur de 10 mm.
+    if getattr(R, "heat", None) is not None:
+        h = R.heat[0] + R.heat[1]; st = float(R.p.get("stride", 4))
+        ys, xs = np.mgrid[0:h.shape[0], 0:h.shape[1]]
+        w = (h / h.sum()).ravel()
+        X = np.stack([(xs.ravel() + 0.5) * st - 0.5, (ys.ravel() + 0.5) * st - 0.5], 1) / R.f
+        c = (w[:, None] * X).sum(0)
+        ev, evec = np.linalg.eigh(((X - c).T * w) @ (X - c))
+        u = evec[:, 1]
+        if np.dot(u, P[1] - P[0]) < 0:
+            u = -u
+        dp = max(float(np.hypot(*(P[1] - P[0]))), 10.0)
+        P = np.vstack([c - u * dp / 2, c + u * dp / 2])
+    hint = None
+    if period_model is not None and getattr(R, "heat", None) is not None:
+        hint = period_model(img, c, u)
+    res = RS.ruler_scale(img, P[0], P[1], ruler_mm=ruler_mm, period_hint=hint)
+    if res is None or res["snr"] < min_snr:
+        return None
+    res["period_hint"] = hint
+    return res
+
+
+class PeriodModel:
+    """Réseau de période (train_ruler_period.py) : sur une bande de règle redressée
+    (même géométrie que build_ruler_strips.py), estime la période du millimètre
+    en pixels -- l'ordre de grandeur qui permet à l'analyse spectrale de choisir
+    le bon pic. model.onnx + period_params.json."""
+
+    def __init__(self, path):
+        import json
+        import onnxruntime as ort
+        self.p = json.load(open(os.path.join(os.path.dirname(path), "period_params.json")))
+        self.sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+
+    def __call__(self, img, c, u):
+        H, W = img.shape[:2]; diag = math.hypot(H, W)
+        L, Hh = self.p["len_frac"] * diag, self.p["hgt_frac"] * diag
+        sw, sh = int(self.p["strip_w"]), int(self.p["strip_h"])
+        kx, ky = sw / L, sh / Hh
+        u = np.asarray(u, float)
+        if u[0] < 0:
+            u = -u
+        n = np.array([-u[1], u[0]])
+        A = np.array([[u[0] * kx, u[1] * kx, 0], [n[0] * ky, n[1] * ky, 0]], float)
+        A[0, 2] = sw / 2 - kx * (u[0] * c[0] + u[1] * c[1]); A[1, 2] = sh / 2 - ky * (n[0] * c[0] + n[1] * c[1])
+        s = cv2.warpAffine(img, A, (sw, sh), flags=cv2.INTER_AREA if kx < 1 else cv2.INTER_LINEAR, borderValue=(0, 0, 0))
+        x = cv2.resize(s, (int(self.p["in_w"]), int(self.p["in_h"])))
+        x = (cv2.cvtColor(x, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0 - np.array(self.p["mean"], np.float32)) / \
+            np.array(self.p["std"], np.float32)
+        lp = float(self.sess.run(None, {"image": x.transpose(2, 0, 1)[None].astype(np.float32)})[0].ravel()[0])
+        per_in = math.exp(lp) * sw / int(self.p["in_w"])    # période dans la bande
+        return per_in / kx                                    # -> pixels de la photo
+
+
+def find_period_model(predictor):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(predictor)))
+    p = os.path.join(root, "mlmorph_run_ruler_period", "model.onnx")
+    return p if os.path.exists(p) else ""
+
+
 def find_global_model(predictor):
     """mlmorph_run_global/model.onnx à côté du dossier du modèle fin."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(predictor)))
@@ -520,6 +598,9 @@ def main():
                     help="épingle LM1=museau et LM2=caudale sur les clics utilisateur "
                          "(placés précisément) ; le modèle ne prédit que les autres")
     ap.add_argument("--no-pin-clicks", dest="pin_clicks", action="store_false")
+    ap.add_argument("--no-auto-scale", dest="auto_scale", action="store_false", default=True,
+                    help="pas de détection automatique de la règle (points 20-21) quand ils "
+                         "ne sont pas fournis")
     ap.add_argument("--no-refine-regions", dest="refine_regions", action="store_false", default=True,
                     help="sans le 2e étage à haute résolution (mlmorph_run_refine_*)")
     ap.add_argument("--hinges", action="store_true", default=False,
@@ -706,8 +787,21 @@ def main():
     rows = [{"landmark": ids[i], "X": round(P_orig[i, 0], 3), "Y": round(P_orig[i, 1], 3),
              "conf": round(float(conf[i]), 4) if conf is not None else ""}
             for i in range(P_orig.shape[0]) if ids[i] <= 19 or args.hinges]
-    # Points d'échelle 20-21 depuis les clics
+    # Points d'échelle 20-21 depuis les clics ; sinon, s'ils manquent et qu'un
+    # réseau `ruler` existe, détection automatique de la règle (--no-auto-scale pour s'en passer)
     n = 19
+    scale_info = None
+    if args.auto_scale and not (args.scale1 and args.scale2) and args.predictor.lower().endswith(".onnx"):
+        rpath = find_ruler_model(args.predictor)
+        if rpath:
+            ppath = find_period_model(args.predictor)
+            scale_info = auto_scale(img, rpath, ruler_mm=args.scale_mm if args.scale_mm > 0 else 10.0,
+                                    period_model=PeriodModel(ppath) if ppath else None)
+            if scale_info is not None:
+                args.scale1 = "%.3f,%.3f" % tuple(scale_info["p20"])
+                args.scale2 = "%.3f,%.3f" % tuple(scale_info["p21"])
+            else:
+                print("SCALE: aucune règle lisible (échelle à cliquer)")
     for k, s in enumerate([args.scale1, args.scale2]):
         if s:
             p = parse_xy(s)
@@ -721,6 +815,11 @@ def main():
     if args.scale1 and args.scale2 and args.scale_mm > 0:
         d = np.hypot(*(parse_xy(args.scale2) - parse_xy(args.scale1)))
         scale_mm_per_px = args.scale_mm / d if d > 0 else ""
+    if scale_info is not None:
+        hint = scale_info.get("period_hint")
+        doubt = hint is not None and not (0.8 <= scale_info["period_px"] / hint <= 1.25)
+        print(f"SCALE: auto {scale_info['mm_per_px']:.5f} mm/px (qualité {scale_info['snr']:.0f})"
+              + (" -- A VÉRIFIER (désaccord avec l'ordre de grandeur)" if doubt else ""))
     if args.auto:
         print(f"AUTO: LM1={snout[0]:.1f},{snout[1]:.1f} LM2={caudal[0]:.1f},{caudal[1]:.1f}"
               + (f" conf={auto_conf[0]:.3f},{auto_conf[1]:.3f}" if auto_conf is not None else ""))

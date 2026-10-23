@@ -300,6 +300,7 @@ fishmorph_build_db <- function(journal_dir,
         COUNT(*) FILTER (WHERE o.status = 'adjusted') AS n_adjusted,
         COUNT(*) FILTER (WHERE o.status = 'derived')  AS n_derived,
         COUNT(*) FILTER (WHERE o.status = 'predicted') AS n_predicted,
+        COUNT(*) FILTER (WHERE o.status = 'validated') AS n_validated,
         COUNT(*) FILTER (WHERE o.status = 'na')       AS n_na,
         s.mm_per_px IS NOT NULL AS has_scale
  FROM specimen s

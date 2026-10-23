@@ -122,3 +122,11 @@ test_that("the global network is found but never listed as a landmark model", {
   res0 <- fm_mlmorph_resources(mlmorph_dir = fake_mlmorph("combined"), check_python = FALSE)
   expect_true(is.na(res0$global))
 })
+
+test_that("the hinges are requested from the worker only when asked", {
+  P <- matrix(c(10, 20, 100, 22), 2, byrow = TRUE)
+  a0 <- Rfishmorph:::.fm_mlmorph_args("w.py", "img.jpg", P, "m.onnx", "ds", "o.csv")
+  a1 <- Rfishmorph:::.fm_mlmorph_args("w.py", "img.jpg", P, "m.onnx", "ds", "o.csv", hinges = TRUE)
+  expect_false("--hinges" %in% a0)
+  expect_true("--hinges" %in% a1)
+})
