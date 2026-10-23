@@ -261,7 +261,7 @@ if (HAS_RIVERS) HYDRO_CHOICES <- c(HYDRO_CHOICES,
 
 # --- specimen panel: landmarks, segments, photographs ------------------------
 #
-# The drawing conventions below are those of launch_fishmorph_digitizer(), and
+# The drawing conventions below are those of intraitR::digitize_fishmorph_reference(), and
 # they are DUPLICATED here rather than imported. Same reason FishInTrait
 # duplicates intraitR's cloud diameter: the digitizer's constants are internal,
 # an app directory has to stay runnable with shiny::runApp() on its own, and a
@@ -2293,7 +2293,7 @@ server <- function(input, output, session) {
                "mesure que la donnee ne porte pas. Les rapports, eux, sont ",
                "sans dimension et donc comparables. %sPanneau en lecture ",
                "seule : aucune modification n'est possible ici, utilisez ",
-               "launch_fishmorph_digitizer() pour corriger un point."),
+               "intraitR::digitize_fishmorph_reference() pour corriger un point."),
         n,
         if (!length(PHOTOS))
           paste0("Photographies non fournies ",

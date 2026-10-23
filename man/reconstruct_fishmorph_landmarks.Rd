@@ -36,7 +36,7 @@ anchor is generated using \code{px_per_cm}.}
 \item{specimen}{Specimen name.}
 
 \item{preset}{Default placement rules: \code{"template"} (generic gabarit) or
-\code{"app"} to reproduce \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} /
+\code{"app"} to reproduce \code{intraitR::digitize_fishmorph_reference()} /
 \code{fishmorph_reconstruct_app} (offsets recalibrated on the workbook medians).
 Both keep the segment lengths \strong{locked} to the input, so the round-trip
 stays exact regardless of preset.}

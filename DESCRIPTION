@@ -1,7 +1,7 @@
 Package: Rfishmorph
 Type: Package
-Title: Digitizing, Storing, Analysing and Exploring the FISHMORPH Database
-Version: 0.17.0
+Title: The FISHMORPH Reference Database and the Visualisation of Its Functional Space
+Version: 0.18.0
 Authors@R: c(
     person("Aurele", "Toussaint", email = "aurele.toussaint@cnrs.fr",
            role = c("aut", "cre"), comment = c(affiliation = "CNRS")))
@@ -13,16 +13,14 @@ Description: Tools dedicated to the FISHMORPH morphological database (Brosse et
     functional trait space, and provides visualization and quality-control tools
     to compare segment- and landmark-derived measurements. It also offers a
     guided workflow to add new species, using 'rfishbase' to validate and update
-    taxonomy and to build a global list of freshwater fishes. Three 'shiny'
-    applications cover the ends of the workflow: a guided digitizer that turns
-    specimen photographs into landmarks, an explorer of the global morphological
-    space of freshwater fishes, and a drainage-basin explorer that reads that
-    space through a world map of basins, their species composition and their
-    functional-diversity indices. Digitized specimens are captured in
-    an append-only journal and consolidated into a derived 'DuckDB' database with
-    integrity constraints, from which 'Parquet' and CSV archives are exported. The
-    FISHMORPH routines were originally developed inside 'intraitR' and are
-    collected here as a stand-alone package.
+    taxonomy and to build a global list of freshwater fishes. It owns the
+    visualisation of the FISHMORPH functional space -- static and interactive
+    ('plotly') projections, density curves, the ordination engine shared with
+    'intraitR' -- and two 'shiny' applications: an explorer of the global
+    morphological space of freshwater fishes, and a drainage-basin explorer that
+    reads that space through a world map of basins, their species composition
+    and their functional-diversity indices. Measuring (the landmark digitizer,
+    its journal and its database) belongs to 'intraitR'.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true

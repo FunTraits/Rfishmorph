@@ -45,13 +45,13 @@ names are matched loosely, and a missing centroid is computed.}
 \item{landmarks}{Optional path to the FISHMORPH publication workbook (sheets
 \code{Global_Landmark} and \code{Global_segments}, keyed on \code{Genus.species}). Adding
 it lets the application draw each species the way
-\code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} does -- landmarks, body segments and
+\code{intraitR::digitize_fishmorph_reference()} does -- landmarks, body segments and
 reference lines -- read-only. Only the COORDINATES are stored: the
 photographs stay on disk and are found at launch through
 \code{\link[=launch_fishmorph_basins]{launch_fishmorph_basins()}}'s \code{photos} argument.}
 
 \item{landmarks_db}{Optional path to the digitizer's DuckDB store
-(\code{\link[=fishmorph_build_db]{fishmorph_build_db()}}). Its coordinates OVERRIDE the workbook's, species
+(\code{intraitR::fishmorph_build_db()}). Its coordinates OVERRIDE the workbook's, species
 by species -- the same precedence \code{\link[=build_fishmorph_landmark_table]{build_fishmorph_landmark_table()}}
 applies, and for the same reason: the workbook is rewritten every
 \code{xlsx_flush_every} records while the journal is written at every one, so a

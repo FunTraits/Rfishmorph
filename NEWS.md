@@ -1,3 +1,31 @@
+# Rfishmorph 0.18.0
+
+## Rfishmorph ne mesure plus
+
+Fin de la fusion des deux digitizers : Rfishmorph est le package de la
+REFERENCE FISHMORPH et de la VISUALISATION de son espace fonctionnel ; la
+mesure est dans intraitR (>= 1.44.0).
+
+* SUPPRIMES (fichiers `digitizer-app.R`, `journal.R`, `database.R`,
+  `mlmorph.R`, `shiny-reconstructor.R`, `inst/mlmorph/`, ~5 100 lignes) : le
+  digitizer, son journal, la base DuckDB, la prediction ml-morph et le
+  reconstructeur deja deprecie. Leurs remplacants dans intraitR :
+  `digitize_fishmorph_reference()` (memes arguments ; meme application que
+  `digitize_landmarks()`), `landmark_journal_read/status/history/qc()`,
+  `consolidate_landmarks()` (relisent aussi les journaux ecrits ici),
+  `fishmorph_build_db()`, `fishmorph_validate()`, `fishmorph_db_connect()`,
+  `write_workbook_atomic()`.
+* Les 14 noms exportes restent, pour UNE version, sous forme de fonctions
+  defuntes : chaque appel s'arrete en nommant son remplacant (voir
+  `?"Rfishmorph-defunct"`).
+* Tests retires avec le code qu'ils testaient (journal, base, conventions et
+  points confondus du digitizer, ml-morph) ; intraitR couvre leurs equivalents.
+* `inst/MEMO_requetes_db.md` deplace dans intraitR ; `MEMO_fonctions.md`
+  annote.
+* Les messages qui renvoyaient au digitizer (explorateur des bassins,
+  `correct_geometry_conventions()`) renvoient a
+  `intraitR::digitize_fishmorph_reference()`.
+
 # Rfishmorph 0.17.0
 
 ## Rfishmorph devient le proprietaire de la visualisation de l'espace FISHMORPH

@@ -39,7 +39,7 @@
 #'
 #' @param data Path to a trait CSV (semicolon-separated) replacing the bundled
 #'   data set. Useful to work on a more recent version, or on the result of
-#'   [fishmorph_build_db()] exported to CSV. `NULL` uses the data set bundled
+#'   `intraitR::fishmorph_build_db()` exported to CSV. `NULL` uses the data set bundled
 #'   with the package.
 #' @param source Which measurement campaign to explore: `"segment"` or
 #'   `"landmark"`. `NULL` (default) follows
@@ -51,7 +51,7 @@
 #' @param ... Passed to [shiny::runApp()] (for example `port`).
 #' @return Invisibly `NULL`; called for its side effect.
 #' @seealso [find_fishmorph_species()] for the same species search from the
-#'   console, [launch_fishmorph_digitizer()] to produce the landmarks,
+#'   console, `intraitR::digitize_fishmorph_reference()` to produce the landmarks,
 #'   [set_fishmorph_source()],
 #'   [project_fishmorph()] to project specimens by computation rather than
 #'   interactively.

@@ -21,7 +21,7 @@
 #' @param preset Which default set to return. `"template"` is the generic
 #'   FISHMORPH gabarit; `"app"` is the set recalibrated on the medians of the
 #'   already-digitized species in the FISHMORPH workbook, as used by
-#'   [launch_fishmorph_digitizer()] (head and pectoral placed more
+#'   `intraitR::digitize_fishmorph_reference()` (head and pectoral placed more
 #'   realistically; `o_PF` is negative because the pectoral insertion sits below
 #'   the body midline).
 #' @return A named list of default parameter values.
@@ -71,7 +71,7 @@ fishmorph_reconstruction_defaults <- function(preset = c("template", "app")) {
 #' @param scale_cm Real length (cm) of the calibration segment (landmarks 20-21).
 #' @param specimen Specimen name.
 #' @param preset Default placement rules: `"template"` (generic gabarit) or
-#'   `"app"` to reproduce [launch_fishmorph_digitizer()] /
+#'   `"app"` to reproduce `intraitR::digitize_fishmorph_reference()` /
 #'   `fishmorph_reconstruct_app` (offsets recalibrated on the workbook medians).
 #'   Both keep the segment lengths **locked** to the input, so the round-trip
 #'   stays exact regardless of preset.

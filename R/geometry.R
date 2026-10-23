@@ -312,7 +312,7 @@ correct_geometry_conventions <- function(x, tolerance_coord = 1e-6,
             "projecting outside the snout -> caudal-base segment: it was ",
             "ignored when straightening. First affected: ",
             paste(utils::head(sp[dropped], 5), collapse = ", "),
-            ". Check those points in launch_fishmorph_digitizer(mode = \"correct\").",
+            ". Check those points in intraitR::digitize_fishmorph_reference(mode = \"correct\").",
             call. = FALSE)
   fishmorph_landmarks(co, metadata = x$metadata, scale = x$scale)
 }

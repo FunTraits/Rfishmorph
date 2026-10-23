@@ -9,7 +9,7 @@ launch_fishmorph_space(data = NULL, source = NULL, launch.browser = TRUE, ...)
 \arguments{
 \item{data}{Path to a trait CSV (semicolon-separated) replacing the bundled
 data set. Useful to work on a more recent version, or on the result of
-\code{\link[=fishmorph_build_db]{fishmorph_build_db()}} exported to CSV. \code{NULL} uses the data set bundled
+\code{intraitR::fishmorph_build_db()} exported to CSV. \code{NULL} uses the data set bundled
 with the package.}
 
 \item{source}{Which measurement campaign to explore: \code{"segment"} or
@@ -45,7 +45,7 @@ launch_fishmorph_space(data = "my_traits.csv")
 }
 \seealso{
 \code{\link[=find_fishmorph_species]{find_fishmorph_species()}} for the same species search from the
-console, \code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} to produce the landmarks,
+console, \code{intraitR::digitize_fishmorph_reference()} to produce the landmarks,
 \code{\link[=set_fishmorph_source]{set_fishmorph_source()}},
 \code{\link[=project_fishmorph]{project_fishmorph()}} to project specimens by computation rather than
 interactively.

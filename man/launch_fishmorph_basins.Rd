@@ -17,7 +17,7 @@ launch_fishmorph_basins(
 \code{fishmorph_basins.rds} in the working directory.}
 
 \item{photos}{Optional folder of species photographs, the same one
-\code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} reads (\code{Genus_species.jpg}, matched on a
+\code{intraitR::digitize_fishmorph_reference()} reads (\code{Genus_species.jpg}, matched on a
 normalised name). The photographs stay LOCAL and are never copied into the
 cache: 7,588 of them are about a gigabyte, and the panel that displays them
 only ever needs one at a time. Without this argument the specimen panel

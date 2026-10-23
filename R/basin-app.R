@@ -735,7 +735,7 @@ fishmorph_basin_indices <- function(scores, axes_ric = 1:2, axes_dist = 1:4) {
 #' @param landmarks Optional path to the FISHMORPH publication workbook (sheets
 #'   `Global_Landmark` and `Global_segments`, keyed on `Genus.species`). Adding
 #'   it lets the application draw each species the way
-#'   [launch_fishmorph_digitizer()] does -- landmarks, body segments and
+#'   `intraitR::digitize_fishmorph_reference()` does -- landmarks, body segments and
 #'   reference lines -- read-only. Only the COORDINATES are stored: the
 #'   photographs stay on disk and are found at launch through
 #'   [launch_fishmorph_basins()]'s `photos` argument.
@@ -757,7 +757,7 @@ fishmorph_basin_indices <- function(scores, axes_ric = 1:2, axes_dist = 1:4) {
 #'   without a body length then leaves the space entirely rather than sitting
 #'   in it at an invented size.
 #' @param landmarks_db Optional path to the digitizer's DuckDB store
-#'   ([fishmorph_build_db()]). Its coordinates OVERRIDE the workbook's, species
+#'   (`intraitR::fishmorph_build_db()`). Its coordinates OVERRIDE the workbook's, species
 #'   by species -- the same precedence [build_fishmorph_landmark_table()]
 #'   applies, and for the same reason: the workbook is rewritten every
 #'   `xlsx_flush_every` records while the journal is written at every one, so a
@@ -1349,7 +1349,7 @@ print.fishmorph_basin_cache <- function(x, ...) {
 #'   `NULL` follows `getOption("Rfishmorph.basin_cache")`, then looks for
 #'   `fishmorph_basins.rds` in the working directory.
 #' @param photos Optional folder of species photographs, the same one
-#'   [launch_fishmorph_digitizer()] reads (`Genus_species.jpg`, matched on a
+#'   `intraitR::digitize_fishmorph_reference()` reads (`Genus_species.jpg`, matched on a
 #'   normalised name). The photographs stay LOCAL and are never copied into the
 #'   cache: 7,588 of them are about a gigabyte, and the panel that displays them
 #'   only ever needs one at a time. Without this argument the specimen panel

@@ -10,7 +10,7 @@ fishmorph_reconstruction_defaults(preset = c("template", "app"))
 \item{preset}{Which default set to return. \code{"template"} is the generic
 FISHMORPH gabarit; \code{"app"} is the set recalibrated on the medians of the
 already-digitized species in the FISHMORPH workbook, as used by
-\code{\link[=launch_fishmorph_digitizer]{launch_fishmorph_digitizer()}} (head and pectoral placed more
+\code{intraitR::digitize_fishmorph_reference()} (head and pectoral placed more
 realistically; \code{o_PF} is negative because the pectoral insertion sits below
 the body midline).}
 }

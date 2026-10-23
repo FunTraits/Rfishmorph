@@ -1,3 +1,12 @@
+> **Note (Rfishmorph 0.18.0).** Ce mémo date de la version 0.2.0. La saisie
+> (`launch_fishmorph_digitizer()`), le journal (`fm_journal_*`,
+> `fishmorph_consolidate()`, `fishmorph_journal_qc()`) et la base DuckDB
+> (`fishmorph_build_db()`, `fishmorph_validate()`, `fishmorph_db_connect()`)
+> sont désormais dans **intraitR** : `digitize_fishmorph_reference()`,
+> `landmark_journal_*()`, `consolidate_landmarks()`, `landmark_journal_qc()`,
+> `fishmorph_build_db()` & co. Le mémo des requêtes SQL est dans
+> `system.file("MEMO_requetes_db.md", package = "intraitR")`.
+
 # Mémo — fonctions du package `Rfishmorph`
 
 Version 0.2.0 · **119 fonctions** : 60 exportées, 59 internes (préfixe `.`), plus
