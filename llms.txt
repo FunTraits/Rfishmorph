@@ -204,6 +204,9 @@ FISHMORPH support migrates out of `intraitR`. Objects of class
 - [`agreement_metrics()`](https://funtraits.github.io/Rfishmorph/reference/agreement_metrics.md)
   : Agreement metrics between two paired numeric vectors
 
+- [`app_theme()`](https://funtraits.github.io/Rfishmorph/reference/app_theme.md)
+  : Common look of the Shiny applications of the FISHMORPH family
+
 - [`as_fishmorph_landmarks()`](https://funtraits.github.io/Rfishmorph/reference/as_fishmorph_landmarks.md)
   : Coerce to fishmorph_landmarks
 

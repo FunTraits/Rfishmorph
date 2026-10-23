@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">Rfishmorph</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.18.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.19.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,6 +33,13 @@
       <small>Source: <a href="https://github.com/FunTraits/Rfishmorph/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.19.0" id="rfishmorph-0190">Rfishmorph 0.19.0<a class="anchor" aria-label="anchor" href="#rfishmorph-0190"></a></h2>
+<ul><li>
+<code><a href="../reference/app_theme.html">app_theme()</a></code> : un tableau DT place dans une carte recevait une hauteur FIXE (400 px) et, avec plus de lignes, debordait sur ce qui le suivait (le graphique d’avancement du hub, par exemple). Les tableaux prennent desormais leur hauteur naturelle, dans toutes les applications du theme.</li>
+<li>NOUVEAU <code>app_theme(primary = )</code> : le theme commun des applications Shiny de Rfishmorph, intraitR et FishInTrait, defini une seule fois ici. Couleurs d’une riviere (eau courante <code>#1d5e6b</code> pour l’accent, fond « hauts-fonds », texte « lit de riviere ») et un ocre de gravier pour le focus clavier, l’onglet actif et une ligne de landmarks pointillee sous l’en-tete. Police IBM Plex Sans (chiffres tabulaires), titres en Plex Sans Condensed, vraie italique pour les especes ; fichiers EMBARQUES (<code>inst/fonts</code>, licence OFL, 220 Ko) : aucune connexion necessaire. Cartes a filet sans ombre, focus visible, pagination et notifications harmonisees. Variables CSS <code>--fm-ink</code>, <code>--fm-muted</code>, <code>--fm-line</code>, <code>--fm-wash</code>, <code>--fm-gravel</code>. L’app <em>basins</em> l’utilise ; <em>FishMorphSpace</em> garde son style (application publiee). base64enc en Suggests.</li>
+<li>Apps space et basins : polices locales (<code><a href="https://rstudio.github.io/sass/reference/font_face.html" class="external-link">bslib::font_collection()</a></code>) au lieu de <code>font_google()</code>, qui telechargeait au demarrage et empechait l’app de s’ouvrir hors ligne ou derriere un proxy.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.18.0" id="rfishmorph-0180">Rfishmorph 0.18.0<a class="anchor" aria-label="anchor" href="#rfishmorph-0180"></a></h2>
 <div class="section level3">
