@@ -3,11 +3,13 @@
 # method, which produce the FISHMORPH functional-space figure (reference density
 # heatmap + per-species hulls/points + species legend).
 #
-# Faithful to intraitR except: (1) the result has class "fishmorph_projection"
-# (to avoid S3 clashes when both packages are loaded); (2) the ITV-proportion
-# tail (itv_proportion()) is not computed here -- it is a separate analysis, not
-# needed for the figure. Everything about the ordination and the plot is
-# identical to intraitR.
+# Since Rfishmorph 0.17.0 this is THE implementation: intraitR no longer
+# carries a copy. intraitR::project_fishmorph() calls this function, prepends
+# the class "intrait_fishmorph_projection" and attaches its ITV analysis
+# (itv_proportion()), which is an intraitR analysis and stays there. Every
+# field that analysis needs (scores on all components, reference and specimen
+# trait matrices, per-trait reference envelope, volume_dims) is therefore
+# computed here, so the projection is built once, in one place.
 # =============================================================================
 
 #' Project specimens into the global FISHMORPH functional space
@@ -15,8 +17,9 @@
 #' Builds a fixed functional trait space by PCA of a reference database of
 #' FISHMORPH ratios (typically the full FISHMORPH database, ~9,000 species), then
 #' places new specimens into that same, frozen space with [stats::predict()],
-#' without re-estimating the ordination. Faithful port of
-#' `intraitR::project_fishmorph()`.
+#' without re-estimating the ordination. `intraitR::project_fishmorph()`
+#' is a thin layer over this function that adds the intraspecific-variability
+#' analysis (`itv_proportion()`).
 #'
 #' @param specimens A data frame (e.g. from [fishmorph_ratios()]) with one row
 #'   per specimen and at least the `traits` columns, plus a `species` column or a
@@ -46,12 +49,19 @@
 #'   reference scale (default `TRUE`).
 #' @param scale Standardise traits to unit variance in the PCA (default `TRUE`).
 #' @param axes Length-2 integer vector of ordination axes (default `c(1, 2)`).
+#' @param volume_dims Number of leading principal components on which
+#'   functional volumes are later computed (default `2L`); stored in the
+#'   result and checked against the number of components available.
 #' @param na_action `"omit"` (default) drops specimens with missing traits;
 #'   `"fail"` errors.
-#' @return An object of class `"fishmorph_projection"` with `scores`,
-#'   `global_scores`, `global_species`, `groups`, `var_explained`, `loadings`,
-#'   `axes`, `traits`, `n_reference` and `pca`. Has [print()] and [plot()]
-#'   methods.
+#' @return An object of class `"fishmorph_projection"` with `scores` (plotted
+#'   axes), `scores_all` (all components), `global_scores`,
+#'   `global_scores_all`, `global_species`, `groups`, `var_explained`,
+#'   `loadings`, `axes`, `volume_dims`, `traits`, `trait_ranges_reference`
+#'   (per-trait min/max/range of the reference on the analysis scale),
+#'   `reference_traits`, `specimen_traits` (analysis scale), `n_reference` and
+#'   `pca`. Has [print()], [plot()], [plotly_fishmorph()] and
+#'   [plot_fishmorph_density()] methods/companions.
 #' @references Brosse et al. (2021) *Global Ecology and Biogeography* 30:2330-2336.
 #' @seealso [plot.fishmorph_projection()], [fishmorph_ratios()],
 #'   [load_fishmorph_reference()]
@@ -72,11 +82,14 @@ project_fishmorph <- function(specimens, reference = NULL,
                               reference_prelogged = TRUE,
                               specimens_prelogged = FALSE,
                               log_transform = TRUE, scale = TRUE,
-                              axes = c(1, 2),
+                              axes = c(1, 2), volume_dims = 2L,
                               na_action = c("omit", "fail")) {
   na_action <- match.arg(na_action)
   if (length(axes) != 2 || !is.numeric(axes))
     stop("`axes` must be a length-2 integer vector.", call. = FALSE)
+  if (length(volume_dims) != 1 || !is.numeric(volume_dims) || volume_dims < 1)
+    stop("`volume_dims` must be a single integer >= 1.", call. = FALSE)
+  volume_dims <- as.integer(volume_dims)
 
   if (is.null(reference)) reference <- load_fishmorph_reference(source = source)
   if (is.character(reference) && length(reference) == 1) {
@@ -122,6 +135,17 @@ project_fishmorph <- function(specimens, reference = NULL,
   var_explained <- (pca$sdev^2 / sum(pca$sdev^2))[axes] * 100
   global_scores <- as.data.frame(pca$x[, axes, drop = FALSE])
   names(global_scores) <- paste0("PC", axes)
+  if (volume_dims > ncol(pca$x))
+    stop("`volume_dims` (", volume_dims, ") exceeds the ", ncol(pca$x),
+         " available principal component(s).", call. = FALSE)
+  # Per-trait envelope of the whole reference on the analysis scale: the
+  # univariate functional diversity against which intraspecific variation is
+  # expressed (intraitR::itv_proportion()).
+  trait_ranges_reference <- data.frame(
+    trait = traits, min = apply(Xref, 2, min), max = apply(Xref, 2, max),
+    row.names = NULL, stringsAsFactors = FALSE)
+  trait_ranges_reference$range <-
+    trait_ranges_reference$max - trait_ranges_reference$min
 
   if (is.null(groups) && "species" %in% names(specimens_df)) groups <- specimens_df$species
   if (is.null(groups))
@@ -171,13 +195,17 @@ project_fishmorph <- function(specimens, reference = NULL,
   rownames(proj_all) <- rownames(specimens_df)
   scores <- as.data.frame(proj_all[, axes, drop = FALSE])
   names(scores) <- paste0("PC", axes); rownames(scores) <- rownames(specimens_df)
+  # transformed specimen traits (analysis scale), aligned to groups/scores
+  colnames(Xsp) <- traits; rownames(Xsp) <- rownames(specimens_df)
 
   structure(list(
     scores = scores, scores_all = proj_all,
     global_scores = global_scores, global_scores_all = pca$x,
     global_species = ref_species, groups = factor(groups),
     var_explained = stats::setNames(var_explained, names(scores)),
-    loadings = pca$rotation, axes = axes, traits = traits,
+    loadings = pca$rotation, axes = axes, volume_dims = volume_dims,
+    traits = traits, trait_ranges_reference = trait_ranges_reference,
+    reference_traits = Xref, specimen_traits = Xsp,
     n_reference = nrow(Xref), pca = pca),
     class = "fishmorph_projection")
 }
@@ -199,28 +227,97 @@ print.fishmorph_projection <- function(x, ...) {
 
 #' Plot specimens projected into the global FISHMORPH space
 #'
-#' Draws the reference database as a kernel-density heatmap with the projected
-#' specimens on top, coloured by species, with per-species convex hulls (or
-#' spider/density/points). Faithful port of
-#' `intraitR:::plot.intrait_fishmorph_projection()`.
+#' Draws the reference database as a background layer -- by default a
+#' kernel-density heatmap of the whole FISHMORPH morphospace -- with the
+#' projected specimens on top of it, grouped/coloured by species, in any of
+#' the display styles shared with [plot_functional_space()] and
+#' `intraitR::plot.intrait_traitspace()`. The
+#' background can equivalently (or additionally) be shown as the raw
+#' reference point cloud, and the focal species' own positions *in the
+#' reference database* can be marked, to see how a group's projected
+#' intraspecific trait variation (ITV) sits relative to its single
+#' database point.
 #'
-#' @param x A `fishmorph_projection` object.
-#' @param style `"hull"` (default), `"spider"`, `"density"` or `"points"`.
-#' @param reference_density Draw the reference density heatmap (default `TRUE`).
-#' @param reference_points Draw the reference as a light point cloud (default
-#'   `FALSE`).
-#' @param itv_reference Mark the focal species' own reference-database points
-#'   (default `FALSE`).
-#' @param arrows Overlay trait loading arrows (biplot; default `FALSE`).
-#' @param arrow_scale,arrow_col Loading-arrow length fraction and colour.
-#' @param background Master switch for all reference layers (default `TRUE`).
-#' @param background_col Reference point-cloud colour.
-#' @param density_probs,density_palette Heatmap contour probabilities / palette.
-#' @param select_species,select_specimens Restrict the plot to a subset.
-#' @param ellipse_level,density_level Coverage for `"spider"`/`"density"`.
-#' @param legend,legend_position,legend_title,legend_italic,abbreviate_species
-#'   Legend controls (defaults tuned for species names).
-#' @param ... Passed to [graphics::plot()].
+#' @param style Character, one of `"hull"` (default; per-species convex hull
+#'   = the ITV footprint), `"spider"` (dispersion ellipse + spokes to the
+#'   centroid), `"density"` (per-species kernel-density contour of the
+#'   projected specimens), or `"points"` (the projected points only, no
+#'   per-group geometry). Note this is the *foreground* per-species geometry
+#'   and is independent of `reference_density`, which controls the
+#'   *background* reference heatmap.
+#' @param reference_density Logical, draw the reference database's
+#'   distribution as a filled kernel-density heatmap (a white-to-red
+#'   gradient with a few nested highest-density-region contour lines) behind
+#'   the projected specimens -- the recommended way to show a ~9,000-species
+#'   morphospace, which is unreadable as raw points. Defaults to `TRUE`.
+#' @param reference_points Logical, draw the reference database species as a
+#'   light background point cloud (the previous default display). Can be
+#'   combined with `reference_density`. Defaults to `FALSE`.
+#' @param itv_reference Logical, mark the focal species' *own* entries in
+#'   the reference database -- i.e. the FISHMORPH points of exactly the
+#'   species for which projected ITV is shown -- as filled circles coloured
+#'   to match their species, so the single database morphotype can be
+#'   compared with the spread of the projected individuals. Requires the
+#'   projection to carry reference species labels (`x$global_species`, added
+#'   by [project_fishmorph()]); species with no matching reference row are
+#'   skipped with a warning. Defaults to `FALSE`.
+#' @param arrows Logical, overlay the trait *loadings* (the PCA variable
+#'   contributions stored in `x$loadings`) as a biplot: one arrow per trait,
+#'   drawn from the origin in the direction of that trait's loading on the
+#'   two plotted axes, with the trait name at the arrow tip. This turns the
+#'   score plot into a standard PCA biplot, showing which morphological
+#'   ratios drive each axis and hence how a group's position in the
+#'   morphospace should be read ecomorphologically (e.g. an ITV footprint
+#'   stretched along the body-elongation arrow varies mostly in body shape).
+#'   The arrows are a purely visual overlay and do not change the ordination.
+#'   Defaults to `FALSE`.
+#' @param arrow_scale Numeric in `(0, 1]`, how far the longest loading arrow
+#'   reaches, as a fraction of the distance from the origin to the nearest
+#'   plot edge; all arrows are scaled by this same factor so their relative
+#'   lengths and directions are preserved. Loadings are unit-scaled vectors
+#'   with no natural size in score units, so this is a display choice only.
+#'   Smaller values keep the arrows clear of the outer points; larger values
+#'   make short loadings more legible. Only used when `arrows = TRUE`.
+#'   Defaults to `0.8`.
+#' @param arrow_col Colour of the loading arrows and their trait labels (when
+#'   `arrows = TRUE`). Defaults to `"grey20"`.
+#' @param background Logical master switch: when `FALSE`, no reference
+#'   background layer of any kind is drawn (overrides `reference_density`,
+#'   `reference_points` and `itv_reference`). Defaults to `TRUE`.
+#' @param background_col Colour of the reference point cloud (when
+#'   `reference_points = TRUE`). Defaults to `"grey75"`.
+#' @param density_probs Numeric vector of coverage probabilities for the
+#'   reference heatmap's highest-density-region contour lines. Defaults to
+#'   `c(0.25, 0.5, 0.99)`.
+#' @param density_palette Optional character vector of colours for the
+#'   reference heatmap gradient (low to high density). `NULL` (default) uses
+#'   a white-to-dark-red ColorBrewer YlOrRd ramp.
+#' @param ellipse_level,density_level Coverage probabilities for the
+#'   `"spider"` ellipse and `"density"` contour respectively. Default
+#'   `0.95`.
+#' @param legend Logical, draw a species legend. Defaults to `TRUE`.
+#' @param legend_position,legend_title,legend_italic,abbreviate_species
+#'   Legend controls, as in [plot_functional_space()]; defaults here are
+#'   tuned for species names (`legend_title = "Species"`, italic,
+#'   abbreviated binomials).
+#'
+#' @details
+#' In the `plot()` method, `select_species`/`select_specimens` restrict
+#' *this plot* to a subset of the already-projected species or specimen
+#' identifiers, without recomputing the space (the reference background is
+#' unchanged); `NULL` (default) plots everything projected. When
+#' `itv_reference = TRUE`, the reference points marked follow the same
+#' selection: only the focal species still shown after
+#' `select_species`/`select_specimens` are matched against the reference
+#' database (matching is case-insensitive and treats spaces and underscores
+#' as equivalent, so `"Squalius cephalus"` and `"Squalius_cephalus"` match).
+#'
+#' @param select_species,select_specimens Optional filters restricting the
+#'   plot to some groups (matched against `x$groups`) or specimen identifiers
+#'   (matched against `rownames(x$scores)`); combined by intersection.
+#' @param x A `"fishmorph_projection"` object from [project_fishmorph()]
+#'   (including intraitR's `"intrait_fishmorph_projection"` subclass).
+#' @param ... Further arguments passed to [graphics::plot()].
 #' @return Invisibly `x`.
 #' @export
 plot.fishmorph_projection <- function(x,
@@ -262,7 +359,8 @@ plot.fishmorph_projection <- function(x,
   if (show_ref && isTRUE(itv_reference)) {
     gs <- x$global_species
     if (is.null(gs)) {
-      warning("`itv_reference = TRUE` needs reference species labels.", call. = FALSE)
+      warning("`itv_reference = TRUE` needs reference species labels; recompute ",
+              "the projection with project_fishmorph().", call. = FALSE)
     } else {
       norm <- function(s) tolower(gsub("[ _]+", " ", trimws(as.character(s))))
       focal <- levels(gr); gs_norm <- norm(gs)

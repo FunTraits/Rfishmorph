@@ -17,6 +17,7 @@ project_fishmorph(
   log_transform = TRUE,
   scale = TRUE,
   axes = c(1, 2),
+  volume_dims = 2L,
   na_action = c("omit", "fail")
 )
 }
@@ -59,21 +60,30 @@ reference scale (default \code{TRUE}).}
 
 \item{axes}{Length-2 integer vector of ordination axes (default \code{c(1, 2)}).}
 
+\item{volume_dims}{Number of leading principal components on which
+functional volumes are later computed (default \code{2L}); stored in the
+result and checked against the number of components available.}
+
 \item{na_action}{\code{"omit"} (default) drops specimens with missing traits;
 \code{"fail"} errors.}
 }
 \value{
-An object of class \code{"fishmorph_projection"} with \code{scores},
-\code{global_scores}, \code{global_species}, \code{groups}, \code{var_explained}, \code{loadings},
-\code{axes}, \code{traits}, \code{n_reference} and \code{pca}. Has \code{\link[=print]{print()}} and \code{\link[=plot]{plot()}}
-methods.
+An object of class \code{"fishmorph_projection"} with \code{scores} (plotted
+axes), \code{scores_all} (all components), \code{global_scores},
+\code{global_scores_all}, \code{global_species}, \code{groups}, \code{var_explained},
+\code{loadings}, \code{axes}, \code{volume_dims}, \code{traits}, \code{trait_ranges_reference}
+(per-trait min/max/range of the reference on the analysis scale),
+\code{reference_traits}, \code{specimen_traits} (analysis scale), \code{n_reference} and
+\code{pca}. Has \code{\link[=print]{print()}}, \code{\link[=plot]{plot()}}, \code{\link[=plotly_fishmorph]{plotly_fishmorph()}} and
+\code{\link[=plot_fishmorph_density]{plot_fishmorph_density()}} methods/companions.
 }
 \description{
 Builds a fixed functional trait space by PCA of a reference database of
 FISHMORPH ratios (typically the full FISHMORPH database, ~9,000 species), then
 places new specimens into that same, frozen space with \code{\link[stats:predict]{stats::predict()}},
-without re-estimating the ordination. Faithful port of
-\code{intraitR::project_fishmorph()}.
+without re-estimating the ordination. \code{intraitR::project_fishmorph()}
+is a thin layer over this function that adds the intraspecific-variability
+analysis (\code{itv_proportion()}).
 }
 \examples{
 \donttest{

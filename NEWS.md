@@ -1,3 +1,29 @@
+# Rfishmorph 0.17.0
+
+## Rfishmorph devient le proprietaire de la visualisation de l'espace FISHMORPH
+
+Premiere etape du dedoublonnage intraitR / Rfishmorph / FishInTrait : Rfishmorph
+est le package de visualisation (et de reference FISHMORPH), intraitR celui de
+la mesure. Les fonctions ci-dessous n'existent plus qu'ici ; intraitR les
+reexporte, donc aucun script n'est a modifier.
+
+* NOUVEAU (deplaces depuis intraitR) : `plotly_fishmorph()`,
+  `plot_fishmorph_density()`, `max_pair_distance()`. Ils acceptent tout objet
+  `"fishmorph_projection"`, y compris la sous-classe
+  `"intrait_fishmorph_projection"` d'intraitR (dont les resultats ITV
+  s'affichent dans les infobulles quand ils sont presents).
+* `project_fishmorph()` est desormais L'implementation unique : nouvel
+  argument `volume_dims` et nouveaux champs `scores_all`, `global_scores_all`,
+  `volume_dims`, `trait_ranges_reference`, `reference_traits`,
+  `specimen_traits`. `intraitR::project_fishmorph()` l'appelle et n'y ajoute
+  que `itv_proportion()`.
+* NOUVEAU : primitives `fm_plot_ordination()`, `fm_group_palette()`,
+  `fm_abbreviate_species()` (exportees, hors index) : le moteur de trace et le
+  cache de couleurs sont partages avec intraitR. Une espece garde donc la meme
+  couleur quel que soit le package qui dessine (il y avait deux caches).
+* Tests deplaces : `test-plotly_fishmorph.R`, `test-plot_fishmorph_density.R`,
+  `test-plot-ordination.R` (helpers du moteur).
+
 # Rfishmorph 0.16.0
 
 ## Landmarking tout automatique

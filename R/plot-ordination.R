@@ -1,15 +1,17 @@
 # =============================================================================
-# plot-ordination.R -- the shared base-graphics ordination plotter and its
-# helpers, ported verbatim from intraitR (utils-internal.R + group_colors.R) so
-# the FISHMORPH functional-space figures are IDENTICAL to intraitR's:
+# plot-ordination.R -- THE base-graphics ordination plotter and its helpers:
 #   .plot_ordination(), .density_field()/.kde2d(), .covariance_ellipse(),
 #   .density_contour(), .stable_group_colors()/.ordination_palette(),
 #   .abbreviate_species_name(), plus the exported group_colors()/
-#   reset_group_colors(). Only the cache environment name differs.
+#   reset_group_colors().
+# Since Rfishmorph 0.17.0 this is the only copy: intraitR's trait-space,
+# shape-space and bootstrap plots draw through fm_plot_ordination() and take
+# their colours from fm_group_palette(), so there is ONE colour cache per
+# session and a species keeps its colour whichever package draws it.
 # =============================================================================
 
 # session-persistent species-colour cache (so a species keeps its colour across
-# calls). Named to avoid clashing with intraitR's own cache.
+# calls, and across packages: intraitR reads it through fm_group_palette()).
 .fm_color_cache <- new.env(parent = emptyenv())
 
 .ordination_palette <- function(n) {
@@ -328,3 +330,52 @@ group_colors <- function(x) {
   }
   invisible(NULL)
 }
+
+# -----------------------------------------------------------------------------
+# Low-level primitives shared with intraitR. Exported (but kept out of the
+# reference index) so intraitR can draw through the same engine without `:::`.
+# -----------------------------------------------------------------------------
+
+#' Shared ordination-plot primitives (for package developers)
+#'
+#' The engine behind every ordination figure of Rfishmorph and intraitR
+#' (species hulls, spiders, dispersion ellipses, density contours, reference
+#' heatmap, legend). They are exported so that intraitR's trait-space,
+#' shape-space and bootstrap plots draw through this one implementation and
+#' share its session colour cache; end users should call the high-level
+#' functions ([plot.fishmorph_projection()], [plot_functional_space()],
+#' [plotly_fishmorph()]) instead.
+#'
+#' * `fm_plot_ordination()` draws scores coloured by group on the current
+#'   device; its arguments are those of the internal plotter (`scores`,
+#'   `groups`, `xlab`, `ylab`, `style`, `ellipse_level`, `density_level`,
+#'   `legend`, `legend_position`, `legend_title`, `legend_italic`,
+#'   `abbreviate_species`, `space_name`, `background`, `background_col`,
+#'   `background_density`, `background_points`, `density_probs`,
+#'   `density_palette`, `highlight`, `highlight_col`, and graphical `...`).
+#' * `fm_group_palette()` returns the session-stable colour of each label,
+#'   assigning new colours to labels never seen before.
+#' * `fm_abbreviate_species()` turns clean binomials into `"G. species"`.
+#'
+#' @param ... Arguments passed to the internal ordination plotter.
+#' @param labels Character vector of group labels.
+#' @param x Character vector of species names.
+#' @return `fm_plot_ordination()`: invisibly `NULL` (called for its side
+#'   effect). `fm_group_palette()`: a named character vector of colours, one
+#'   per unique label. `fm_abbreviate_species()`: a character vector the
+#'   length of `x`.
+#' @seealso [group_colors()], [reset_group_colors()]
+#' @keywords internal
+#' @examples
+#' fm_group_palette(c("Salmo trutta", "Squalius cephalus"))
+#' fm_abbreviate_species("Barbatula barbatula")
+#' @export
+fm_plot_ordination <- function(...) .plot_ordination(...)
+
+#' @rdname fm_plot_ordination
+#' @export
+fm_group_palette <- function(labels) .stable_group_colors(labels)
+
+#' @rdname fm_plot_ordination
+#' @export
+fm_abbreviate_species <- function(x) .abbreviate_species_name(x)

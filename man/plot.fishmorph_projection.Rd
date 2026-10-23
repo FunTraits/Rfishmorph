@@ -30,42 +30,113 @@
 )
 }
 \arguments{
-\item{x}{A \code{fishmorph_projection} object.}
+\item{x}{A \code{"fishmorph_projection"} object from \code{\link[=project_fishmorph]{project_fishmorph()}}
+(including intraitR's \code{"intrait_fishmorph_projection"} subclass).}
 
-\item{style}{\code{"hull"} (default), \code{"spider"}, \code{"density"} or \code{"points"}.}
+\item{style}{Character, one of \code{"hull"} (default; per-species convex hull
+= the ITV footprint), \code{"spider"} (dispersion ellipse + spokes to the
+centroid), \code{"density"} (per-species kernel-density contour of the
+projected specimens), or \code{"points"} (the projected points only, no
+per-group geometry). Note this is the \emph{foreground} per-species geometry
+and is independent of \code{reference_density}, which controls the
+\emph{background} reference heatmap.}
 
-\item{reference_density}{Draw the reference density heatmap (default \code{TRUE}).}
+\item{reference_density}{Logical, draw the reference database's
+distribution as a filled kernel-density heatmap (a white-to-red
+gradient with a few nested highest-density-region contour lines) behind
+the projected specimens -- the recommended way to show a ~9,000-species
+morphospace, which is unreadable as raw points. Defaults to \code{TRUE}.}
 
-\item{reference_points}{Draw the reference as a light point cloud (default
-\code{FALSE}).}
+\item{reference_points}{Logical, draw the reference database species as a
+light background point cloud (the previous default display). Can be
+combined with \code{reference_density}. Defaults to \code{FALSE}.}
 
-\item{itv_reference}{Mark the focal species' own reference-database points
-(default \code{FALSE}).}
+\item{itv_reference}{Logical, mark the focal species' \emph{own} entries in
+the reference database -- i.e. the FISHMORPH points of exactly the
+species for which projected ITV is shown -- as filled circles coloured
+to match their species, so the single database morphotype can be
+compared with the spread of the projected individuals. Requires the
+projection to carry reference species labels (\code{x$global_species}, added
+by \code{\link[=project_fishmorph]{project_fishmorph()}}); species with no matching reference row are
+skipped with a warning. Defaults to \code{FALSE}.}
 
-\item{arrows}{Overlay trait loading arrows (biplot; default \code{FALSE}).}
+\item{arrows}{Logical, overlay the trait \emph{loadings} (the PCA variable
+contributions stored in \code{x$loadings}) as a biplot: one arrow per trait,
+drawn from the origin in the direction of that trait's loading on the
+two plotted axes, with the trait name at the arrow tip. This turns the
+score plot into a standard PCA biplot, showing which morphological
+ratios drive each axis and hence how a group's position in the
+morphospace should be read ecomorphologically (e.g. an ITV footprint
+stretched along the body-elongation arrow varies mostly in body shape).
+The arrows are a purely visual overlay and do not change the ordination.
+Defaults to \code{FALSE}.}
 
-\item{arrow_scale, arrow_col}{Loading-arrow length fraction and colour.}
+\item{arrow_scale}{Numeric in \verb{(0, 1]}, how far the longest loading arrow
+reaches, as a fraction of the distance from the origin to the nearest
+plot edge; all arrows are scaled by this same factor so their relative
+lengths and directions are preserved. Loadings are unit-scaled vectors
+with no natural size in score units, so this is a display choice only.
+Smaller values keep the arrows clear of the outer points; larger values
+make short loadings more legible. Only used when \code{arrows = TRUE}.
+Defaults to \code{0.8}.}
 
-\item{background}{Master switch for all reference layers (default \code{TRUE}).}
+\item{arrow_col}{Colour of the loading arrows and their trait labels (when
+\code{arrows = TRUE}). Defaults to \code{"grey20"}.}
 
-\item{background_col}{Reference point-cloud colour.}
+\item{background}{Logical master switch: when \code{FALSE}, no reference
+background layer of any kind is drawn (overrides \code{reference_density},
+\code{reference_points} and \code{itv_reference}). Defaults to \code{TRUE}.}
 
-\item{density_probs, density_palette}{Heatmap contour probabilities / palette.}
+\item{background_col}{Colour of the reference point cloud (when
+\code{reference_points = TRUE}). Defaults to \code{"grey75"}.}
 
-\item{select_species, select_specimens}{Restrict the plot to a subset.}
+\item{density_probs}{Numeric vector of coverage probabilities for the
+reference heatmap's highest-density-region contour lines. Defaults to
+\code{c(0.25, 0.5, 0.99)}.}
 
-\item{ellipse_level, density_level}{Coverage for \code{"spider"}/\code{"density"}.}
+\item{density_palette}{Optional character vector of colours for the
+reference heatmap gradient (low to high density). \code{NULL} (default) uses
+a white-to-dark-red ColorBrewer YlOrRd ramp.}
 
-\item{legend, legend_position, legend_title, legend_italic, abbreviate_species}{Legend controls (defaults tuned for species names).}
+\item{select_species, select_specimens}{Optional filters restricting the
+plot to some groups (matched against \code{x$groups}) or specimen identifiers
+(matched against \code{rownames(x$scores)}); combined by intersection.}
 
-\item{...}{Passed to \code{\link[graphics:plot]{graphics::plot()}}.}
+\item{ellipse_level, density_level}{Coverage probabilities for the
+\code{"spider"} ellipse and \code{"density"} contour respectively. Default
+\code{0.95}.}
+
+\item{legend}{Logical, draw a species legend. Defaults to \code{TRUE}.}
+
+\item{legend_position, legend_title, legend_italic, abbreviate_species}{Legend controls, as in \code{\link[=plot_functional_space]{plot_functional_space()}}; defaults here are
+tuned for species names (\code{legend_title = "Species"}, italic,
+abbreviated binomials).}
+
+\item{...}{Further arguments passed to \code{\link[graphics:plot]{graphics::plot()}}.}
 }
 \value{
 Invisibly \code{x}.
 }
 \description{
-Draws the reference database as a kernel-density heatmap with the projected
-specimens on top, coloured by species, with per-species convex hulls (or
-spider/density/points). Faithful port of
-\code{intraitR:::plot.intrait_fishmorph_projection()}.
+Draws the reference database as a background layer -- by default a
+kernel-density heatmap of the whole FISHMORPH morphospace -- with the
+projected specimens on top of it, grouped/coloured by species, in any of
+the display styles shared with \code{\link[=plot_functional_space]{plot_functional_space()}} and
+\code{intraitR::plot.intrait_traitspace()}. The
+background can equivalently (or additionally) be shown as the raw
+reference point cloud, and the focal species' own positions \emph{in the
+reference database} can be marked, to see how a group's projected
+intraspecific trait variation (ITV) sits relative to its single
+database point.
+}
+\details{
+In the \code{plot()} method, \code{select_species}/\code{select_specimens} restrict
+\emph{this plot} to a subset of the already-projected species or specimen
+identifiers, without recomputing the space (the reference background is
+unchanged); \code{NULL} (default) plots everything projected. When
+\code{itv_reference = TRUE}, the reference points marked follow the same
+selection: only the focal species still shown after
+\code{select_species}/\code{select_specimens} are matched against the reference
+database (matching is case-insensitive and treats spaces and underscores
+as equivalent, so \code{"Squalius cephalus"} and \code{"Squalius_cephalus"} match).
 }
