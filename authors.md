@@ -8,7 +8,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/FunTraits/Rfishmorph/blob/v0.19.1/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/FunTraits/Rfishmorph/blob/main/DESCRIPTION)
 
 Toussaint A (2026). *Rfishmorph: The FISHMORPH Reference Database and
 the Visualisation of Its Functional Space*. R package version 0.19.1,
