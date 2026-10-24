@@ -288,7 +288,7 @@ if (requireNamespace("plotly", quietly = TRUE)) {
 Brosse, S., Charpin, N., Su, G., Toussaint, A., Herrera-R, G. A.,
 Tedesco, P. A., & Villeger, S. (2021). FISHMORPH: A global database on
 morphological traits of freshwater fishes. Global Ecology and
-Biogeography, 30(11), 2330-2336.
+Biogeography, 30(12), 2330-2336.
 
 Sievert, C. (2020). Interactive Web-Based Data Visualization with R,
 plotly, and shiny. Chapman and Hall/CRC.

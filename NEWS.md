@@ -1,3 +1,8 @@
+# Rfishmorph 0.19.1
+
+* Documentation de `plotly_fishmorph()` : FISHMORPH est dans *Global Ecology
+  and Biogeography* 30(12), pas 30(11).
+
 # Rfishmorph 0.19.0
 
 * `app_theme()` : un tableau DT place dans une carte recevait une hauteur FIXE
