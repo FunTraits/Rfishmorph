@@ -1,5 +1,12 @@
 # Changelog
 
+## Rfishmorph 0.19.1
+
+- Documentation de
+  [`plotly_fishmorph()`](https://funtraits.github.io/Rfishmorph/reference/plotly_fishmorph.md)
+  : FISHMORPH est dans *Global Ecology and Biogeography* 30(12), pas
+  30(11).
+
 ## Rfishmorph 0.19.0
 
 - [`app_theme()`](https://funtraits.github.io/Rfishmorph/reference/app_theme.md)
