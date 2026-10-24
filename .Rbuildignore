@@ -11,3 +11,5 @@
 ^docs$
 ^\.Rhistory$
 ^codecov\.yml$
+^LICENSE$
+^data-raw$

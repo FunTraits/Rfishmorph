@@ -472,9 +472,20 @@ print.fishmorph_phylopcoa <- function(x, ...) {
 #'   of filled cells.
 #' @seealso [fishmorph_trait_space()], [impute_landmarks()]
 #' @examples
+#' # a small table of the 11 segments for two species, with two missing cells
+#' set.seed(1)
+#' seg <- as.data.frame(matrix(runif(20 * 11, 1, 10), nrow = 20,
+#'                             dimnames = list(NULL, fishmorph_segment_names())))
+#' seg$Genus.species <- rep(c("Salmo trutta", "Barbus barbus"), each = 10)
+#' seg$Bl[2] <- NA
+#' seg$Eh[15] <- NA
+#' seg_imp <- impute_traits(seg, method = "impute_group_mean")
+#' attr(seg_imp, "n_imputed")
 #' \donttest{
-#' # impute the 11 segments of a Global_segments table, by species + phylogeny
-#' seg_imp <- impute_traits(pub_seg, groups = pub_seg$Genus.species)
+#' # default: random forest helped by the species' phylogenetic axes
+#' if (requireNamespace("missForest", quietly = TRUE)) {
+#'   seg_phy <- impute_traits(seg)
+#' }
 #' }
 #' @export
 impute_traits <- function(data, cols = fishmorph_segment_names(),
