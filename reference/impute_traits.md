@@ -90,9 +90,22 @@ of filled cells.
 ## Examples
 
 ``` r
+# a small table of the 11 segments for two species, with two missing cells
+set.seed(1)
+seg <- as.data.frame(matrix(runif(20 * 11, 1, 10), nrow = 20,
+                            dimnames = list(NULL, fishmorph_segment_names())))
+seg$Genus.species <- rep(c("Salmo trutta", "Barbus barbus"), each = 10)
+seg$Bl[2] <- NA
+seg$Eh[15] <- NA
+seg_imp <- impute_traits(seg, method = "impute_group_mean")
+#> na_action = "impute_group_mean": imputed 2 missing value(s) using within-group means.
+attr(seg_imp, "n_imputed")
+#> [1] 2
 # \donttest{
-# impute the 11 segments of a Global_segments table, by species + phylogeny
-seg_imp <- impute_traits(pub_seg, groups = pub_seg$Genus.species)
-#> Error: object 'pub_seg' not found
+# default: random forest helped by the species' phylogenetic axes
+if (requireNamespace("missForest", quietly = TRUE)) {
+  seg_phy <- impute_traits(seg)
+}
+#> na_action = "missforest_phylo": imputed 2 missing value(s) using random-forest imputation (missForest), augmented with 10 phylogenetic PCoA axis/axes from the precomputed axis table (2 species matched) (out-of-bag NRMSE = 0.202).
 # }
 ```
